@@ -10,10 +10,11 @@ export default defineConfig({
     __GITHUB_URL__: JSON.stringify('https://github.com/hihanifm/lens-ragas-web'),
   },
   server: {
+    host: true,
     port: 37101,
     proxy: {
       '/api': {
-        target: 'http://localhost:37100',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:37100',
         rewrite: path => path.replace(/^\/api/, ''),
       },
     },

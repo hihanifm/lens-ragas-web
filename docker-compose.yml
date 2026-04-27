@@ -9,3 +9,17 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend/uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "37101:37101"
+    environment:
+      - VITE_API_PROXY_TARGET=http://api:37100
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api

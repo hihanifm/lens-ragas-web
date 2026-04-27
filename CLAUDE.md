@@ -104,7 +104,7 @@ All computed by the `ragas` library. Do not reimplement.
 - Axios (API calls via `src/api/client.js` — all API calls go here, nowhere else)
 
 ### Infrastructure
-- Docker Compose: `api` service (FastAPI only — no DB needed)
+- Docker Compose: `api` (FastAPI) + `frontend` (Vite dev server)
 - Ollama: runs on host, outside Docker
 - Communication: FastAPI → Ollama via `host.docker.internal:11434`
 
@@ -221,14 +221,11 @@ data: {"message": "..."}
 # 1. Copy env
 cp .env.example .env
 
-# 2. Start backend
-make up        # FastAPI at http://localhost:37100
-
-# 3. Start frontend (separate terminal)
-cd frontend
-npm install
-npm run dev    # http://localhost:37101
+# 2. Start backend + frontend (Docker)
+make up
 ```
+
+Backend: `http://localhost:37100`\nFrontend: `http://localhost:37101`
 
 Vite proxies `/api/*` → `http://localhost:37100/*` so no CORS issues in dev.
 
