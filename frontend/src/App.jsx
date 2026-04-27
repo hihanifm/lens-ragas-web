@@ -4,6 +4,7 @@ import Configure from './pages/Configure'
 import Results from './pages/Results'
 import History from './pages/History'
 import { saveRunToHistory } from './utils/history'
+import Footer from './components/Footer'
 
 export default function App() {
   const [step, setStep] = useState('upload') // upload | configure | results | history
@@ -48,7 +49,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -64,7 +65,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-6 py-8 w-full flex-1">
         <Steps current={step} />
 
         {step === 'upload' && <Upload onParsed={handleParsed} />}
@@ -81,6 +82,8 @@ export default function App() {
           />
         )}
       </main>
+
+      <Footer />
     </div>
   )
 }
