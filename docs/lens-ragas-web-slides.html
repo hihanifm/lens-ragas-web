@@ -536,6 +536,57 @@
     </div>
   </div>
 
+  <!-- ── 13. Live results screenshot ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Live Demo</p>
+      <h2>lens-ragas-web in action</h2>
+
+      <!-- Mocked UI -->
+      <div style="background:#f8f9fb;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);font-size:.8rem;margin-top:16px;">
+
+        <!-- Aggregate -->
+        <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;">
+          <p style="font-weight:600;font-size:.85rem;margin-bottom:10px;">Aggregate scores <span style="color:var(--muted);font-weight:400;">(10 rows)</span></p>
+          <div style="display:flex;gap:12px;">
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px 20px;text-align:center;background:#fff;">
+              <p style="color:var(--muted);font-size:.72rem;margin-bottom:3px;">Context Precision</p>
+              <p style="font-size:1.5rem;font-weight:700;color:var(--green);">0.841</p>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px 20px;text-align:center;background:#fff;">
+              <p style="color:var(--muted);font-size:.72rem;margin-bottom:3px;">Context Recall</p>
+              <p style="font-size:1.5rem;font-weight:700;color:var(--amber);">0.767</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <table style="font-size:.78rem;background:var(--surface);">
+          <thead>
+            <tr style="background:#f8f9fb;">
+              <th style="padding:7px 10px;width:28px;color:var(--muted);font-weight:500;">#</th>
+              <th style="padding:7px 10px;text-align:left;font-weight:600;">Question</th>
+              <th style="padding:7px 18px;text-align:center;font-weight:600;white-space:nowrap;">Context Precision</th>
+              <th style="padding:7px 18px;text-align:center;font-weight:600;white-space:nowrap;">Context Recall</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">1</td><td style="padding:6px 10px;">What laptops are suitable for video editing and creative work?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">2</td><td style="padding:6px 10px;">Which monitors support USB-C connectivity for powering a laptop?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">3</td><td style="padding:6px 10px;">What are the best ergonomic office chairs with lumbar support?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--red);">0.340</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">4</td><td style="padding:6px 10px;">Which gaming laptops have dedicated NVIDIA graphics cards?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">0.818</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.667</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">5</td><td style="padding:6px 10px;">What standing desks have electric motors and memory presets?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.686</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">6</td><td style="padding:6px 10px;">Which network switches support PoE for powering access points?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.750</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">7</td><td style="padding:6px 10px;">What routers support Wi-Fi 6E with a 6GHz band?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.750</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">8</td><td style="padding:6px 10px;">Which monitors are designed for professional photo and video color work?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.652</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">9</td><td style="padding:6px 10px;">What office chairs are suitable for larger or taller users?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">0.917</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">10</td><td style="padding:6px 10px;">Which products are currently discontinued or have limited stock?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /deck -->
 
 <!-- Controls -->
