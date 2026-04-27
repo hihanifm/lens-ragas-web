@@ -2,9 +2,11 @@ import { useState } from 'react'
 import Upload from './pages/Upload'
 import Configure from './pages/Configure'
 import Results from './pages/Results'
+import History from './pages/History'
+import { saveRunToHistory } from './utils/history'
 
 export default function App() {
-  const [step, setStep] = useState('upload') // upload | configure | results
+  const [step, setStep] = useState('upload') // upload | configure | results | history
   const [parsedFile, setParsedFile] = useState(null)
   const [evalResults, setEvalResults] = useState(null)
 
@@ -13,7 +15,19 @@ export default function App() {
     setStep('configure')
   }
 
-  function handleResults(data) {
+  function handleResults(data, meta = {}) {
+    const run = {
+      meta: {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        ...meta,
+        metrics: data?.metrics,
+        total: data?.total ?? data?.rows?.length,
+      },
+      results: data,
+    }
+    saveRunToHistory(run)
+
     setEvalResults(data)
     setStep('results')
   }
@@ -24,12 +38,29 @@ export default function App() {
     setStep('upload')
   }
 
+  function openHistory() {
+    setStep('history')
+  }
+
+  function openRunFromHistory(entry) {
+    setEvalResults(entry.results)
+    setStep('results')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <span className="text-lg font-semibold text-gray-900">LENS RAGAS Eval</span>
-          <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-semibold text-gray-900">LENS RAGAS Eval</span>
+            <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
+          </div>
+          <button
+            onClick={openHistory}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+          >
+            History
+          </button>
         </div>
       </header>
 
@@ -42,6 +73,12 @@ export default function App() {
         )}
         {step === 'results' && (
           <Results results={evalResults} onReset={reset} />
+        )}
+        {step === 'history' && (
+          <History
+            onOpenRun={openRunFromHistory}
+            onBack={() => setStep(evalResults ? 'results' : 'upload')}
+          />
         )}
       </main>
     </div>

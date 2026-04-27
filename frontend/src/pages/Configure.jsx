@@ -72,7 +72,19 @@ export default function Configure({ parsedFile, onResults, onBack }) {
       },
       onComplete: ({ aggregate, total }) => {
         setRunning(false)
-        onResults({ rows, aggregate, metrics: selectedMetrics, total })
+        onResults(
+          { rows, aggregate, metrics: selectedMetrics, total },
+          {
+            provider,
+            llm_provider: provider,
+            ollama_base_url: provider === 'ollama' ? ollamaUrl : undefined,
+            ollama_model: provider === 'ollama' ? ollamaModel : undefined,
+            openai_model: provider === 'openai' ? openaiModel : undefined,
+            file_id: parsedFile?.file_id,
+            row_count: parsedFile?.row_count,
+            format: parsedFile?.format,
+          }
+        )
       },
       onError: (msg) => {
         setRunning(false)
