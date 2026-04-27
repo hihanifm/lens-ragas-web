@@ -6,6 +6,11 @@ Upload a LENS export (or any compatible CSV), pick your metrics and LLM judge, a
 
 Not a RAG system. Not a search tool. Not a benchmark suite. Just evaluation, done simply.
 
+### Convenience features
+- **History (browser-only)**: completed runs are saved in **browser localStorage** (last 20 runs) and can be reopened from the UI.
+- **Load exported scores CSV**: you can load a previously exported scores CSV back into the Results screen without re-running.
+- **Export filename context**: exports include the input filename as a prefix when available.
+
 ---
 
 ## Interaction Protocol (NEVER skip this)
@@ -144,6 +149,7 @@ lens-ragas-web/
         Upload.jsx      ← file drop + /parse call
         Configure.jsx   ← metric + LLM config + SSE progress
         Results.jsx     ← scores table + CSV export
+        History.jsx     ← browser-local run history
       api/
         client.js       ← ALL axios/fetch calls here, nowhere else
       App.jsx           ← 3-step flow: upload → configure → results
@@ -225,6 +231,10 @@ npm run dev    # http://localhost:37101
 ```
 
 Vite proxies `/api/*` → `http://localhost:37100/*` so no CORS issues in dev.
+
+### Notes on History (browser-only)
+- History is stored in **the current browser** only (not the server).
+- Clearing browser site data will clear history.
 
 ### Common Makefile targets
 | Command | What it does |
