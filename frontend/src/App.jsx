@@ -16,20 +16,27 @@ export default function App() {
     setStep('configure')
   }
 
+  function handleLoadScores(results) {
+    setParsedFile(null)
+    setEvalResults(results)
+    setStep('results')
+  }
+
   function handleResults(data, meta = {}) {
+    const runMeta = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      ...meta,
+      metrics: data?.metrics,
+      total: data?.total ?? data?.rows?.length,
+    }
     const run = {
-      meta: {
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        ...meta,
-        metrics: data?.metrics,
-        total: data?.total ?? data?.rows?.length,
-      },
-      results: data,
+      meta: runMeta,
+      results: { ...data, meta: runMeta },
     }
     saveRunToHistory(run)
 
-    setEvalResults(data)
+    setEvalResults(run.results)
     setStep('results')
   }
 
@@ -53,12 +60,19 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold text-gray-900">LENS RAGAS Eval</span>
+            <button
+              type="button"
+              onClick={reset}
+              className="text-lg font-semibold text-gray-900 hover:underline underline-offset-4"
+              title="Home"
+            >
+              LENS RAGAS Eval
+            </button>
             <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
           </div>
           <button
             onClick={openHistory}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             History
           </button>
@@ -68,7 +82,7 @@ export default function App() {
       <main className="max-w-4xl mx-auto px-6 py-8 w-full flex-1">
         <Steps current={step} />
 
-        {step === 'upload' && <Upload onParsed={handleParsed} />}
+        {step === 'upload' && <Upload onParsed={handleParsed} onLoadScores={handleLoadScores} />}
         {step === 'configure' && (
           <Configure parsedFile={parsedFile} onResults={handleResults} onBack={reset} />
         )}

@@ -47,14 +47,14 @@ export default function History({ onOpenRun, onBack }) {
           <div className="flex gap-2">
             <button
               onClick={onBack}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium bg-white border border-gray-300 rounded-lg text-gray-800 shadow-sm hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               Back
             </button>
             <button
               onClick={handleClearAll}
               disabled={!hasRuns}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium bg-amber-50 border border-amber-300 rounded-lg text-amber-800 shadow-sm hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50"
             >
               Clear
             </button>
@@ -112,7 +112,7 @@ export default function History({ onOpenRun, onBack }) {
                           </button>
                           <button
                             onClick={() => handleDelete(run.id)}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                            className="px-3 py-1.5 text-sm font-medium bg-red-50 border border-red-300 rounded-lg text-red-700 shadow-sm hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                           >
                             Delete
                           </button>

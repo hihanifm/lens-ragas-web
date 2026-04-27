@@ -83,6 +83,7 @@ export default function Configure({ parsedFile, onResults, onBack }) {
             file_id: parsedFile?.file_id,
             row_count: parsedFile?.row_count,
             format: parsedFile?.format,
+            input_filename: parsedFile?.input_filename,
           }
         )
       },

@@ -6,7 +6,7 @@ const METRIC_LABELS = {
 }
 
 export default function Results({ results, onReset }) {
-  const { rows, aggregate, metrics } = results
+  const { rows, aggregate, metrics, meta } = results
 
   function exportCsv() {
     const header = ['question', ...metrics].join(',')
@@ -23,7 +23,7 @@ export default function Results({ results, onReset }) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'ragas_scores.csv'
+    a.download = buildExportFilename(meta?.input_filename)
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -91,6 +91,20 @@ export default function Results({ results, onReset }) {
       </div>
     </div>
   )
+}
+
+function buildExportFilename(inputFilename) {
+  const fallback = 'ragas_scores.csv'
+  if (!inputFilename || typeof inputFilename !== 'string') return fallback
+
+  const base = inputFilename.replace(/\.[^/.]+$/, '')
+  const safeBase = base
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  if (!safeBase) return fallback
+  return `${safeBase}_ragas_scores.csv`
 }
 
 function scoreColor(val) {
