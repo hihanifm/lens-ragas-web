@@ -2,9 +2,10 @@ import os
 import uuid
 import json
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from models import EvalRequest, ParsedFile
 from evaluator import detect_format, load_rows, run_evaluation
 import config
@@ -18,13 +19,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+api = APIRouter(prefix="/api")
 
-@app.get("/health")
+
+@api.get("/health")
 def health():
     return {"status": "ok"}
 
 
-@app.get("/config")
+@api.get("/config")
 def get_config():
     return {
         "llm_provider": config.LLM_PROVIDER,
@@ -35,7 +38,7 @@ def get_config():
     }
 
 
-@app.post("/parse", response_model=ParsedFile)
+@api.post("/parse", response_model=ParsedFile)
 async def parse_file(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in (".json", ".csv"):
@@ -74,7 +77,7 @@ async def parse_file(file: UploadFile = File(...)):
     )
 
 
-@app.post("/evaluate")
+@api.post("/evaluate")
 async def evaluate_endpoint(req: EvalRequest):
     filepath = os.path.join(config.UPLOAD_DIR, req.file_id)
     if not os.path.exists(filepath):
@@ -88,3 +91,18 @@ async def evaluate_endpoint(req: EvalRequest):
             yield f"event: error\ndata: {_json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+app.include_router(api)
+
+STATIC_DIR = os.getenv("STATIC_DIR", os.path.join(os.path.dirname(__file__), "static"))
+if os.path.isdir(STATIC_DIR):
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(404, "Not Found")
