@@ -3,6 +3,7 @@ import { API_BASE } from '../utils/basePath'
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 const GITHUB_URL = typeof __GITHUB_URL__ !== 'undefined' ? __GITHUB_URL__ : null
+const MODE_LABEL = import.meta.env.DEV ? 'Dev' : 'Prod'
 
 export default function Footer() {
   const [api, setApi] = useState({ status: 'checking', latencyMs: null, checkedAt: null })
@@ -71,6 +72,11 @@ export default function Footer() {
           <span className="text-gray-300">·</span>
           <span>
             Version <span className="font-mono text-gray-700">{APP_VERSION}</span>
+          </span>
+
+          <span className="text-gray-300">·</span>
+          <span>
+            Mode <span className="font-medium text-gray-700">{MODE_LABEL}</span>
           </span>
         </div>
 
