@@ -151,7 +151,7 @@ lens-ragas-web/
       index.css
     index.html
     package.json
-    vite.config.js      ← proxy: /api → localhost:8001
+    vite.config.js      ← proxy: /api → localhost:37100
     tailwind.config.js
     postcss.config.js
   docker-compose.yml
@@ -216,15 +216,15 @@ data: {"message": "..."}
 cp .env.example .env
 
 # 2. Start backend
-make up        # FastAPI at http://localhost:8001
+make up        # FastAPI at http://localhost:37100
 
 # 3. Start frontend (separate terminal)
 cd frontend
 npm install
-npm run dev    # http://localhost:5174
+npm run dev    # http://localhost:37101
 ```
 
-Vite proxies `/api/*` → `http://localhost:8001/*` so no CORS issues in dev.
+Vite proxies `/api/*` → `http://localhost:37100/*` so no CORS issues in dev.
 
 ### Common Makefile targets
 | Command | What it does |
@@ -250,7 +250,7 @@ pip install -r requirements.txt
 
 ### Dev vs Prod architecture
 
-**Dev:** Vite dev server (`localhost:5174`) + FastAPI (`localhost:8001`) run separately.
+**Dev:** Vite dev server (`localhost:37101`) + FastAPI (`localhost:37100`) run separately.
 Vite proxy handles `/api` → FastAPI with no CORS issues.
 
 **Prod (planned):** FastAPI serves the compiled frontend as static files — single port, no
