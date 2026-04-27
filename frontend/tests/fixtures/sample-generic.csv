@@ -1,0 +1,4 @@
+question,contexts,ground_truth,answer
+"What is LENS?","[\"LENS is a lightweight engineering search portal.\"]","LENS is a lightweight engineering search portal.","LENS is a lightweight engineering search portal."
+"What file formats are supported?","[\"The tool accepts .json and .csv.\"]","It supports .json and .csv.","It supports .json and .csv."
+

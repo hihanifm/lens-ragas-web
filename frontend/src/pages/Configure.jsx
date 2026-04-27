@@ -208,6 +208,7 @@ export default function Configure({ parsedFile, onResults, onBack }) {
           Back
         </button>
         <button onClick={handleRun} disabled={running || !selectedMetrics.length}
+          data-testid="run-evaluation"
           className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
           {running ? 'Running...' : 'Run Evaluation'}
         </button>

@@ -31,7 +31,7 @@ export default function Results({ results, onReset }) {
   return (
     <div className="space-y-6">
       {/* Aggregate summary */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-5" data-testid="results-aggregate">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">Aggregate scores ({rows.length} rows)</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {metrics.map(m => (

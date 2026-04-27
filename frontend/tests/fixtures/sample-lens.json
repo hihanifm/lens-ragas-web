@@ -1,0 +1,17 @@
+[
+  {
+    "question": "What is LENS?",
+    "contexts": [
+      "LENS is a lightweight engineering search portal for Excel-based knowledge bases."
+    ],
+    "ground_truth": "LENS is a lightweight engineering search portal for Excel-based knowledge bases."
+  },
+  {
+    "question": "What file formats are supported?",
+    "contexts": [
+      "The tool accepts .json (LENS export) or .csv with question and contexts columns."
+    ],
+    "ground_truth": "It supports .json and .csv."
+  }
+]
+

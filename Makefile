@@ -1,4 +1,6 @@
-.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod
+.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod e2e e2e-up e2e-down
+
+SHELL := /bin/bash
 
 # Dev/prod run different compose files (different ports).
 # These helpers ensure a clean stop of the other mode before switching.
@@ -44,3 +46,28 @@ prod-restart: prod-down prod-up
 
 prod-ps:
 	docker compose -f docker-compose.prod.yml ps
+
+e2e-up:
+	$(MAKE) up
+
+e2e-down:
+	$(MAKE) down
+
+e2e:
+	@set -euo pipefail; \
+	ROOT_DIR="$$(pwd)"; \
+	trap 'cd "$$ROOT_DIR" && $(MAKE) e2e-down' EXIT; \
+	$(MAKE) e2e-up; \
+	echo "Waiting for API..."; \
+	for i in {1..60}; do \
+	  curl -fsS "http://localhost:37100/health" >/dev/null && break; \
+	  sleep 1; \
+	done; \
+	curl -fsS "http://localhost:37100/health" >/dev/null; \
+	echo "Waiting for UI..."; \
+	for i in {1..60}; do \
+	  curl -fsS "http://localhost:37101/" >/dev/null && break; \
+	  sleep 1; \
+	done; \
+	curl -fsS "http://localhost:37101/" >/dev/null; \
+	cd "$$ROOT_DIR/frontend" && npm install && npx playwright install chromium && npm run e2e

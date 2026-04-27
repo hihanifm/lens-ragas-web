@@ -61,7 +61,10 @@ export default function Footer() {
     <footer className="border-t border-gray-200 bg-white">
       <div className="max-w-4xl mx-auto px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-          <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-full border ${apiPill.color}`}>
+          <span
+            className={`inline-flex items-center gap-2 px-2 py-1 rounded-full border ${apiPill.color}`}
+            data-testid="api-status-pill"
+          >
             <span
               className={`w-1.5 h-1.5 rounded-full ${api.status === 'online' ? 'bg-green-500' : api.status === 'offline' ? 'bg-red-500' : 'bg-gray-400'}`}
             />

@@ -60,6 +60,7 @@ export default function Upload({ onParsed, onLoadScores }) {
       <div
         className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
           ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+        data-testid="upload-dropzone"
         onClick={() => inputRef.current.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -80,6 +81,7 @@ export default function Upload({ onParsed, onLoadScores }) {
         type="file"
         accept=".json,.csv"
         className="hidden"
+        data-testid="upload-input"
         onChange={e => handleFile(e.target.files[0])}
       />
 
@@ -91,6 +93,7 @@ export default function Upload({ onParsed, onLoadScores }) {
           <button
             onClick={() => scoresRef.current.click()}
             disabled={loading}
+            data-testid="load-scores-csv"
             className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
           >
             Load scores CSV
