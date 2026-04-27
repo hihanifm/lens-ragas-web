@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+import { API_BASE } from '../utils/basePath'
+
+const api = axios.create({ baseURL: API_BASE })
 
 export async function fetchConfig() {
   const { data } = await api.get('/config')
@@ -16,7 +18,7 @@ export async function parseFile(file) {
 
 export function streamEvaluation(req, { onStart, onRow, onComplete, onError }) {
   const es = new EventSource(
-    '/api/evaluate?' + new URLSearchParams({ _dummy: Date.now() })
+    `${API_BASE}/evaluate?` + new URLSearchParams({ _dummy: Date.now() })
   )
 
   // EventSource doesn't support POST; use fetch with ReadableStream instead
@@ -24,7 +26,7 @@ export function streamEvaluation(req, { onStart, onRow, onComplete, onError }) {
 
   const ctrl = new AbortController()
 
-  fetch('/api/evaluate', {
+  fetch(`${API_BASE}/evaluate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

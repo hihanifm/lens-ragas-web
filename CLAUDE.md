@@ -256,6 +256,43 @@ Vite proxy handles `/api` → FastAPI with no CORS issues.
 **Prod (planned):** FastAPI serves the compiled frontend as static files — single port, no
 separate frontend process. `npm run build` → mount `frontend/dist/` via FastAPI `StaticFiles`.
 
+### Reverse proxy (Caddy) with suffix path
+
+If you serve this app under a suffix like **`/lens-ragas-web/`** (because your reverse proxy hosts multiple services),
+set a base path at build time so both **static assets** and **API calls** are correctly prefixed.
+
+#### Build with base path
+
+```bash
+cd frontend
+VITE_BASE_PATH=/lens-ragas-web npm run build
+```
+
+#### Caddyfile example
+
+This serves:
+- UI at `/lens-ragas-web/*`
+- API at `/lens-ragas-web/api/*` proxied to the FastAPI backend
+
+```caddy
+your-host {
+  handle_path /lens-ragas-web/api/* {
+    reverse_proxy 127.0.0.1:37100
+  }
+
+  handle_path /lens-ragas-web/* {
+    root * /path/to/lens-ragas-web/frontend/dist
+    try_files {path} /index.html
+    file_server
+  }
+}
+```
+
+Notes:
+- `handle_path` strips the matched prefix before proxying/serving.
+  - `/lens-ragas-web/api/health` becomes `/health` to FastAPI.
+- `try_files ... /index.html` is required for SPA routing.
+
 ---
 
 ## Design Decisions

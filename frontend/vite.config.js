@@ -4,6 +4,7 @@ import pkg from './package.json'
 
 export default defineConfig({
   plugins: [react()],
+  base: (process.env.VITE_BASE_PATH || '/').replace(/\/?$/, '/'),
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __GITHUB_URL__: JSON.stringify('https://github.com/hihanifm/lens-ragas-web'),

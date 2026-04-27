@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { API_BASE } from '../utils/basePath'
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 const GITHUB_URL = typeof __GITHUB_URL__ !== 'undefined' ? __GITHUB_URL__ : null
@@ -12,7 +13,7 @@ export default function Footer() {
     async function check() {
       const t0 = performance.now()
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' })
+        const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' })
         const t1 = performance.now()
         if (!cancelled) {
           setApi({
