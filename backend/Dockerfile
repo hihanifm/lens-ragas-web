@@ -1,5 +1,13 @@
 FROM python:3.11-slim
 
+# Proxy build args — passed from docker-compose, empty if not set in .env
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY
+
 WORKDIR /app
 
 # Install lab CA cert (needed when pip goes through a forward proxy with SSL inspection).

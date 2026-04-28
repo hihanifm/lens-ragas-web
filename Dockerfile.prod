@@ -1,5 +1,14 @@
 # ── Stage 1: build frontend ───────────────────────────────────────────────────
 FROM node:20-alpine AS frontend-build
+
+# Proxy build args — passed from docker-compose, empty if not set in .env
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY
+
 WORKDIR /frontend
 
 # Install lab CA cert — append directly to the existing bundle, no apk add needed.
@@ -22,6 +31,14 @@ RUN npm run build
 
 # ── Stage 2: Python runtime ───────────────────────────────────────────────────
 FROM python:3.11-slim AS app
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY
+
 WORKDIR /app
 
 # Install lab CA cert so pip and runtime HTTP calls trust the forward proxy.

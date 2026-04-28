@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile.prod
       args:
         VITE_BASE_PATH: ${VITE_BASE_PATH:-/}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
     ports:
       - "37100:37100"
     env_file:

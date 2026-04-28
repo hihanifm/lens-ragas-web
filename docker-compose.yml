@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
     ports:
       - "37100:37100"
     env_file:
@@ -16,6 +20,10 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile.dev
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
     ports:
       - "37101:37101"
     environment:
