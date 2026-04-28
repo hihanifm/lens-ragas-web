@@ -1,4 +1,4 @@
-.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod e2e e2e-up e2e-down
+.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod e2e e2e-up e2e-down pip-cache
 
 SHELL := /bin/bash
 
@@ -46,6 +46,11 @@ prod-restart: prod-down prod-up
 
 prod-ps:
 	docker compose -f docker-compose.prod.yml ps
+
+# Run this once on the host (where pip works) before make build.
+# Downloads all wheels into pip-cache/ so Docker installs offline.
+pip-cache:
+	pip download -r backend/requirements.txt -d pip-cache/
 
 e2e-up:
 	$(MAKE) up

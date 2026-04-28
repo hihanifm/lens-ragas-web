@@ -25,3 +25,8 @@ frontend/.vite/
 
 # Uploads (transient)
 backend/uploads/
+
+# Pre-downloaded pip wheels (run: make pip-cache)
+pip-cache/*.whl
+pip-cache/*.tar.gz
+pip-cache/*.gz
