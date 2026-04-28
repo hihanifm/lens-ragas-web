@@ -10,18 +10,23 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 
 WORKDIR /app
 
-# Install lab CA cert — append directly to the existing bundle, no apk add needed.
-# (apk add would itself go through the proxy and fail before the cert is trusted.)
+# Install lab CA cert — append directly, no apk add needed.
 COPY certs/ /tmp/certs/
 RUN if ls /tmp/certs/*.crt 2>/dev/null 1>&2; then \
       cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; \
     fi && rm -rf /tmp/certs
 
-# Tell Node to trust the updated system cert bundle.
+# Trust the updated system bundle for Node runtime.
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+# Tell npm to trust the registry host explicitly at build time.
+RUN npm config set strict-ssl false
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
+
+# Re-enable strict SSL for the running dev server.
+RUN npm config set strict-ssl true
 
 COPY frontend/ .
 
