@@ -21,6 +21,23 @@ app.add_middleware(
 
 api = APIRouter(prefix="/api")
 
+def _extract_lens_metadata(raw_json, rows: list[dict] | None = None):
+    # LENS exports may include metadata under a top-level "_lens" key or embedded in any row.
+    if isinstance(raw_json, dict) and isinstance(raw_json.get("_lens"), dict):
+        return raw_json["_lens"]
+
+    if isinstance(raw_json, list):
+        for item in raw_json:
+            if isinstance(item, dict) and isinstance(item.get("_lens"), dict):
+                return item["_lens"]
+
+    if rows:
+        for r in rows:
+            if isinstance(r, dict) and isinstance(r.get("_lens"), dict):
+                return r["_lens"]
+
+    return None
+
 
 @api.get("/health")
 def health():
@@ -51,6 +68,13 @@ async def parse_file(file: UploadFile = File(...)):
         content = await file.read()
         f.write(content)
 
+    raw_json = None
+    if ext == ".json":
+        try:
+            raw_json = json.loads(content.decode("utf-8"))
+        except Exception:
+            raw_json = None
+
     try:
         rows = load_rows(dest)
     except Exception as e:
@@ -74,6 +98,7 @@ async def parse_file(file: UploadFile = File(...)):
         columns=cols,
         available_metrics=available,
         format=fmt,
+        lens_metadata=_extract_lens_metadata(raw_json, rows) if ext == ".json" else None,
     )
 
 

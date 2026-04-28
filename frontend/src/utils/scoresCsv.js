@@ -48,7 +48,31 @@ export function parseExportedScoresCsv(text) {
 
   if (!lines.length) throw new Error('CSV is empty.')
 
-  const header = parseCsvLine(lines[0])
+  const meta = {}
+  let idx = 0
+
+  while (idx < lines.length && lines[idx].trim().startsWith('#')) {
+    const line = lines[idx].trim().replace(/^#\s?/, '')
+    const m = line.match(/^([a-zA-Z0-9_.-]+)\s*:\s*(.*)$/)
+    if (m) {
+      const key = m[1]
+      const val = m[2]
+      if (key === 'lens_metadata') {
+        try {
+          meta.lens_metadata = JSON.parse(val)
+        } catch {
+          // ignore parse errors; keep file importable
+        }
+      } else {
+        meta[key] = val
+      }
+    }
+    idx++
+  }
+
+  if (idx >= lines.length) throw new Error('CSV is empty.')
+
+  const header = parseCsvLine(lines[idx])
   if (header.length < 2 || header[0] !== 'question') {
     throw new Error('Not a recognized scores CSV (expected first column "question").')
   }
@@ -57,7 +81,7 @@ export function parseExportedScoresCsv(text) {
   const rows = []
   let aggregate = {}
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = idx + 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i])
     if (!cols.length) continue
     const q = cols[0]
@@ -78,6 +102,7 @@ export function parseExportedScoresCsv(text) {
     aggregate,
     metrics,
     total: rows.length,
+    meta,
   }
 }
 

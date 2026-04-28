@@ -84,6 +84,7 @@ export default function Configure({ parsedFile, onResults, onBack }) {
             row_count: parsedFile?.row_count,
             format: parsedFile?.format,
             input_filename: parsedFile?.input_filename,
+            lens_metadata: parsedFile?.lens_metadata,
           }
         )
       },
@@ -119,6 +120,43 @@ export default function Configure({ parsedFile, onResults, onBack }) {
         {parsedFile.format === 'lens' && (
           <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
             LENS export detected — no <code>answer</code> column. Only context metrics are available.
+          </div>
+        )}
+        {parsedFile?.lens_metadata && (
+          <div className="mt-3 text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            <p className="font-medium text-gray-700 mb-1">Export metadata</p>
+            <div className="text-gray-600 space-y-1">
+              {parsedFile.lens_metadata?.exported_at && (
+                <div>
+                  <span className="text-gray-500">exported_at</span>{' '}
+                  <span className="font-mono text-gray-700">{parsedFile.lens_metadata.exported_at}</span>
+                </div>
+              )}
+              {parsedFile.lens_metadata?.k != null && (
+                <div>
+                  <span className="text-gray-500">k</span>{' '}
+                  <span className="font-mono text-gray-700">{String(parsedFile.lens_metadata.k)}</span>
+                </div>
+              )}
+              {parsedFile.lens_metadata?.pipeline && typeof parsedFile.lens_metadata.pipeline === 'object' && (
+                <div>
+                  <span className="text-gray-500">pipeline</span>{' '}
+                  <span className="font-mono text-gray-700">
+                    {Object.entries(parsedFile.lens_metadata.pipeline)
+                      .map(([k, v]) => `${k}=${String(v)}`)
+                      .join(' ')}
+                  </span>
+                </div>
+              )}
+              <details className="pt-1">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">
+                  View raw JSON
+                </summary>
+                <pre className="mt-2 text-[11px] leading-4 overflow-auto bg-white border border-gray-200 rounded p-2 text-gray-700">
+                  {JSON.stringify(parsedFile.lens_metadata, null, 2)}
+                </pre>
+              </details>
+            </div>
           </div>
         )}
       </div>

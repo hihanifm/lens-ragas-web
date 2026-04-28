@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 
 
 class EvalRequest(BaseModel):
@@ -18,3 +18,4 @@ class ParsedFile(BaseModel):
     columns: list[str]
     available_metrics: list[str]
     format: str  # "lens" | "generic"
+    lens_metadata: Optional[Any] = None

@@ -33,6 +33,7 @@ export default function Upload({ onParsed, onLoadScores }) {
       onLoadScores?.({
         ...results,
         meta: {
+          ...(results.meta || {}),
           input_filename: file.name,
           loaded_from: 'scores_csv',
           createdAt: new Date().toISOString(),
