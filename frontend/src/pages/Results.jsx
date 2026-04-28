@@ -9,24 +9,28 @@ export default function Results({ results, onReset }) {
   const { rows, aggregate, metrics, meta } = results
 
   function exportCsv() {
-    const metaLines = []
-    if (meta?.lens_metadata) {
-      try {
-        metaLines.push(`# lens_metadata: ${JSON.stringify(meta.lens_metadata)}`)
-      } catch {
-        // ignore if metadata isn't serializable
-      }
-    }
-
-    const header = ['question', ...metrics].join(',')
+    const header = ['question', ...metrics, 'lens_metadata'].join(',')
     const lines = rows.map(r =>
       [
         `"${(r.question || '').replace(/"/g, '""')}"`,
         ...metrics.map(m => r.scores[m] ?? ''),
+        '',
       ].join(',')
     )
-    const aggLine = ['"AGGREGATE"', ...metrics.map(m => aggregate[m] ?? '')].join(',')
-    const csv = [...metaLines, header, ...lines, aggLine].join('\n')
+    let metaJson = ''
+    if (meta?.lens_metadata) {
+      try {
+        metaJson = JSON.stringify(meta.lens_metadata).replace(/"/g, '""')
+      } catch {
+        metaJson = ''
+      }
+    }
+
+    const aggLine = ['"AGGREGATE"', ...metrics.map(m => aggregate[m] ?? ''), metaJson ? `"${metaJson}"` : ''].join(
+      ','
+    )
+
+    const csv = [header, ...lines, aggLine].join('\n')
 
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
