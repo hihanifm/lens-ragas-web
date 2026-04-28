@@ -75,6 +75,25 @@ pip install -r requirements.txt
 
 ---
 
+## Environments
+
+**Development**: macOS and Linux both supported. Run `make up` on either platform.
+
+**Deployment / Production**: Linux server. Users access via browser from Windows PCs (on the same LAN or via reverse proxy). Ollama also runs on the Linux host with a GPU.
+
+### Offline pip wheels (required for Linux Docker builds in restricted labs)
+
+If the Docker build host is behind a forward proxy that does SSL inspection, `pip install` inside Docker may fail with SSL/EOF errors. Pre-download Linux-compatible wheels **on the Linux server** (not Mac — macOS wheels are incompatible):
+
+```bash
+make pip-cache   # downloads manylinux wheels into pip-cache/
+make build       # installs from pip-cache offline — no network needed inside Docker
+```
+
+The `make pip-cache` target uses `--platform manylinux2014_x86_64 --python-version 3.11 --implementation cp --abi cp311 --only-binary=:all:` so the wheels are compatible with the Python 3.11-slim Docker image. Wheels are gitignored but included in the Docker build context.
+
+---
+
 ## Design Principles (NEVER violate these)
 
 1. **KISS** — Simpler is always preferred. Complexity only when a simpler solution provably fails.
