@@ -33,6 +33,7 @@ make down      # stop
 make logs      # tail all logs
 make restart   # down + up
 make build     # rebuild images without starting
+make ps        # show running containers
 ```
 Frontend: `http://localhost:37101` — Vite dev server with HMR.
 Backend API: `http://localhost:37100/api/...`
@@ -41,7 +42,10 @@ Backend API: `http://localhost:37100/api/...`
 ```bash
 make prod-up      # build + start; single container on port 37100
 make prod-down
+make prod-build   # build image without starting
+make prod-restart # prod-down + prod-up
 make prod-logs
+make prod-ps      # show running containers
 ```
 Prod uses `docker-compose.prod.yml` + `Dockerfile.prod` (multi-stage: Node build → Python runtime).
 
@@ -63,6 +67,10 @@ Test fixtures live in `frontend/tests/fixtures/`. E2E config: `frontend/playwrig
 ### Local frontend only (no Docker)
 ```bash
 cd frontend && npm install && npm run dev   # http://localhost:37101
+```
+Override the API proxy target if the backend isn't on localhost:
+```bash
+VITE_API_PROXY_TARGET=http://192.168.x.x:37100 npm run dev
 ```
 
 ### Local Python one-offs
@@ -193,12 +201,26 @@ Columns: `question` (required), `contexts` (required, JSON array string), `groun
 
 ```bash
 LLM_PROVIDER=ollama          # ollama | openai
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434   # default inside Docker: host.docker.internal:11434
 OLLAMA_MODEL=llama3.2
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 ```
 Copy `.env.example` → `.env`. UI values sent in the request body always override env defaults.
+
+`OLLAMA_BASE_URL` defaults to `http://host.docker.internal:11434` in `config.py` so it works inside Docker without any `.env` changes. Override it only when running the backend locally outside Docker.
+
+---
+
+## Testing
+
+Only Playwright E2E tests exist — no unit tests. E2E tests live in `frontend/tests/e2e/` and run against the live dev stack.
+
+---
+
+## Frontend dependency note
+
+`@tanstack/react-query` and `react-router-dom` appear in `package.json` but are **not used** in the app. All HTTP calls go through `api/client.js` (axios + native fetch). Do not add react-query hooks or router `<Route>` components without explicit discussion.
 
 ---
 

@@ -1,4 +1,4 @@
-.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod e2e e2e-up e2e-down pip-cache
+.PHONY: up down build logs restart ps prod-up prod-down prod-build prod-logs prod-restart prod-ps clean-down-dev clean-down-prod clean e2e e2e-up e2e-down pip-cache
 
 SHELL := /bin/bash
 
@@ -49,6 +49,10 @@ prod-ps:
 
 # Run this once on the Linux server (where pip works) before make build.
 # Downloads Linux/Python 3.11 compatible wheels so Docker installs offline.
+clean:
+	docker compose down --rmi all
+	docker compose -f docker-compose.prod.yml down --rmi all
+
 pip-cache:
 	pip download \
 	  --platform manylinux2014_x86_64 \
