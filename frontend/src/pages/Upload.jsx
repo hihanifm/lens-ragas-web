@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { parseFile } from '../api/client'
 import { parseExportedScoresCsv } from '../utils/scoresCsv'
+const SAMPLE_FILENAME = 'sample-dataset.json'
+const SAMPLE_SCORES_FILENAME = 'sample-scores.csv'
 
 export default function Upload({ onParsed, onLoadScores }) {
   const inputRef = useRef()
@@ -19,6 +21,37 @@ export default function Upload({ onParsed, onLoadScores }) {
     } catch (e) {
       setError(e.response?.data?.detail || e.message)
     } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSample() {
+    setError(null)
+    setLoading(true)
+    try {
+      // Fetch from Vite's public dir (same origin, no CORS issues)
+      const res = await fetch(`${location.origin}/${SAMPLE_FILENAME}`)
+      if (!res.ok) throw new Error('Could not load sample file')
+      const blob = await res.blob()
+      const file = new File([blob], SAMPLE_FILENAME, { type: 'application/json' })
+      await handleFile(file)
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+    }
+  }
+
+  async function handleSampleScores() {
+    setError(null)
+    setLoading(true)
+    try {
+      const res = await fetch(`${location.origin}/${SAMPLE_SCORES_FILENAME}`)
+      if (!res.ok) throw new Error('Could not load sample scores file')
+      const blob = await res.blob()
+      const file = new File([blob], SAMPLE_SCORES_FILENAME, { type: 'text/csv' })
+      await handleScoresFile(file)
+    } catch (e) {
+      setError(e.message)
       setLoading(false)
     }
   }
@@ -73,6 +106,17 @@ export default function Upload({ onParsed, onLoadScores }) {
           <>
             <p className="text-gray-700 font-medium">Drop file here or click to browse</p>
             <p className="text-sm text-gray-400 mt-1">.json or .csv</p>
+            <p className="text-sm text-gray-400 mt-3">
+              or{' '}
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); handleSample() }}
+                className="text-blue-600 hover:underline focus:outline-none"
+              >
+                load the sample dataset
+              </button>{' '}
+              to try it out
+            </p>
           </>
         )}
       </div>
@@ -88,7 +132,17 @@ export default function Upload({ onParsed, onLoadScores }) {
 
       <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-xs text-gray-500">
-          Already have exported scores? Load the exported CSV to view results without re-running.
+          Already have exported scores? Load the exported CSV to view results without re-running,{' '}
+          or{' '}
+          <button
+            type="button"
+            onClick={handleSampleScores}
+            disabled={loading}
+            className="text-blue-600 hover:underline focus:outline-none disabled:opacity-50"
+          >
+            load the sample scores
+          </button>
+          .
         </p>
         <div className="flex items-center gap-2">
           <button

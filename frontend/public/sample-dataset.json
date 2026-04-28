@@ -1,0 +1,174 @@
+{
+  "results": [
+    {
+      "question": "What laptops are suitable for video editing and creative work?",
+      "contexts": [
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | ThinkPad X1 Carbon | 14\" ultralight business laptop with Intel Core i7, 16GB RAM, 512GB SSD. Excellent keyboard and long battery life.",
+        "Sheet1 | Electronics | ThinkPad X1 Carbon | 14\" ultralight business laptop with Intel Core i7, 16GB RAM, 512GB SSD. Excellent keyboard and long battery life.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | HP Spectre x360 | 13.5\" convertible 2-in-1 with OLED touchscreen. Versatile form factor for professionals."
+      ],
+      "ground_truth": "The Dell XPS 15 with NVIDIA RTX 4060 is ideal for photo and video editing on the go. The Apple MacBook Pro with M2 Pro chip is also excellent for creative work."
+    },
+    {
+      "question": "Which monitors support USB-C connectivity for powering a laptop?",
+      "contexts": [
+        "Sheet1 | Electronics | LG UltraWide 34\" | 34\" curved ultrawide monitor for immersive multitasking. HDR support and USB-C connectivity.",
+        "Sheet1 | Electronics | LG UltraWide 34\" | 34\" curved ultrawide monitor for immersive multitasking. HDR support and USB-C connectivity.",
+        "Sheet1 | Electronics | LG UltraWide 34\" | 34\" curved ultrawide monitor for immersive multitasking. HDR support and USB-C connectivity.",
+        "Sheet1 | Electronics | BenQ PD3220U | 32\" 4K Thunderbolt 3 display for Mac and PC professionals. Excellent color accuracy.",
+        "Sheet1 | Electronics | BenQ PD3220U | 32\" 4K Thunderbolt 3 display for Mac and PC professionals. Excellent color accuracy.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation."
+      ],
+      "ground_truth": "The LG UltraWide 34 supports USB-C 65W, the Dell UltraSharp 27 supports USB-C 90W, the ASUS ProArt PA279CV supports USB-C 65W, and the BenQ PD3220U supports Thunderbolt 3."
+    },
+    {
+      "question": "What are the best ergonomic office chairs with lumbar support?",
+      "contexts": [
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Herman Miller Aeron | Ergonomic mesh office chair with lumbar support and PostureFit SL. Industry benchmark for comfort.",
+        "Sheet1 | Office Supplies | Herman Miller Aeron | Ergonomic mesh office chair with lumbar support and PostureFit SL. Industry benchmark for comfort.",
+        "Sheet1 | Office Supplies | IKEA Markus | Budget ergonomic chair with built-in lumbar support and breathable mesh back.",
+        "Sheet1 | Office Supplies | IKEA Markus | Budget ergonomic chair with built-in lumbar support and breathable mesh back.",
+        "Sheet1 | Office Supplies | Steelcase Leap V2 | Highly adjustable task chair with LiveBack technology that mimics spine movement."
+      ],
+      "ground_truth": "The Herman Miller Aeron and Steelcase Leap V2 are industry benchmarks for ergonomic seating with lumbar support. The Autonomous ErgoChair Pro also features adjustable lumbar and headrest controls."
+    },
+    {
+      "question": "Which gaming laptops have dedicated NVIDIA graphics cards?",
+      "contexts": [
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | Dell XPS 15 | 15.6\" OLED creator laptop with NVIDIA GPU. Ideal for photo and video editing on the go.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | ASUS ROG Zephyrus G14 | 14\" gaming laptop with AMD Ryzen 9 and dedicated GPU. Compact powerhouse for gamers.",
+        "Sheet1 | Electronics | ThinkPad X1 Carbon | 14\" ultralight business laptop with Intel Core i7, 16GB RAM, 512GB SSD. Excellent keyboard and long battery life.",
+        "Sheet1 | Electronics | ThinkPad X1 Carbon | 14\" ultralight business laptop with Intel Core i7, 16GB RAM, 512GB SSD. Excellent keyboard and long battery life.",
+        "Sheet1 | Electronics | HP Spectre x360 | 13.5\" convertible 2-in-1 with OLED touchscreen. Versatile form factor for professionals."
+      ],
+      "ground_truth": "The ASUS ROG Zephyrus G14 has an NVIDIA RTX 4060 and the Dell XPS 15 has an NVIDIA RTX 4060, both suitable for gaming."
+    },
+    {
+      "question": "What standing desks have electric motors and memory presets?",
+      "contexts": [
+        "Sheet1 | Office Supplies | Autonomous SmartDesk Pro | Affordable motorized standing desk with clean design and four memory presets.",
+        "Sheet1 | Office Supplies | Autonomous SmartDesk Pro | Affordable motorized standing desk with clean design and four memory presets.",
+        "Sheet1 | Office Supplies | Flexispot E7 Pro | Electric sit-stand desk with dual motor and programmable height presets.",
+        "Sheet1 | Office Supplies | Flexispot E7 Pro | Electric sit-stand desk with dual motor and programmable height presets.",
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Fully Jarvis | Popular standing desk with bamboo top option and wide height range for tall users.",
+        "Sheet1 | Office Supplies | Fully Jarvis | Popular standing desk with bamboo top option and wide height range for tall users.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls."
+      ],
+      "ground_truth": "The Flexispot E7 Pro, Uplift V2, and Autonomous SmartDesk Pro all feature dual electric motors with programmable height memory presets."
+    },
+    {
+      "question": "Which network switches support PoE for powering access points?",
+      "contexts": [
+        "Sheet1 | Networking | TP-Link TL-SG108PE | 8-port PoE+ smart switch with VLAN and QoS. Great for small office deployments.",
+        "Sheet1 | Networking | TP-Link TL-SG108PE | 8-port PoE+ smart switch with VLAN and QoS. Great for small office deployments.",
+        "Sheet1 | Networking | TP-Link TL-SG108PE | 8-port PoE+ smart switch with VLAN and QoS. Great for small office deployments.",
+        "Sheet1 | Networking | TP-Link TL-SG108PE | 8-port PoE+ smart switch with VLAN and QoS. Great for small office deployments.",
+        "Sheet1 | Networking | TP-Link TL-SG108PE | 8-port PoE+ smart switch with VLAN and QoS. Great for small office deployments.",
+        "Sheet1 | Networking | Ubiquiti UniFi Switch 24 PoE | 24-port managed PoE switch with 250W budget. Integrates with UniFi ecosystem.",
+        "Sheet1 | Networking | Ubiquiti UniFi Switch 24 PoE | 24-port managed PoE switch with 250W budget. Integrates with UniFi ecosystem.",
+        "Sheet1 | Networking | Ubiquiti UniFi Switch 24 PoE | 24-port managed PoE switch with 250W budget. Integrates with UniFi ecosystem.",
+        "Sheet1 | Networking | Ubiquiti UniFi Switch 24 PoE | 24-port managed PoE switch with 250W budget. Integrates with UniFi ecosystem.",
+        "Sheet1 | Networking | Mikrotik CRS328-24P | 24-port PoE switch with SFP+ uplinks and SwOS/RouterOS dual boot."
+      ],
+      "ground_truth": "The Ubiquiti UniFi Switch 24 PoE (250W budget), TP-Link TL-SG108PE (55W budget), and Mikrotik CRS328-24P (500W budget) all support PoE+ for powering access points and other devices."
+    },
+    {
+      "question": "What routers support Wi-Fi 6E with a 6GHz band?",
+      "contexts": [
+        "Sheet1 | Networking | TP-Link Archer AXE75 | Wi-Fi 6E tri-band router with 6GHz band support. Great range for large homes.",
+        "Sheet1 | Networking | TP-Link Archer AXE75 | Wi-Fi 6E tri-band router with 6GHz band support. Great range for large homes.",
+        "Sheet1 | Networking | TP-Link Archer AXE75 | Wi-Fi 6E tri-band router with 6GHz band support. Great range for large homes.",
+        "Sheet1 | Networking | TP-Link Archer AXE75 | Wi-Fi 6E tri-band router with 6GHz band support. Great range for large homes.",
+        "Sheet1 | Networking | Netgear Orbi RBK863S | Quad-band Wi-Fi 6E mesh with dedicated 6GHz backhaul. Premium whole-home solution.",
+        "Sheet1 | Networking | Netgear Orbi RBK863S | Quad-band Wi-Fi 6E mesh with dedicated 6GHz backhaul. Premium whole-home solution.",
+        "Sheet1 | Networking | Netgear Orbi RBK863S | Quad-band Wi-Fi 6E mesh with dedicated 6GHz backhaul. Premium whole-home solution.",
+        "Sheet1 | Networking | Netgear Orbi RBK863S | Quad-band Wi-Fi 6E mesh with dedicated 6GHz backhaul. Premium whole-home solution.",
+        "Sheet1 | Networking | ASUS ZenWiFi Pro ET12 | Tri-band Wi-Fi 6E mesh system with dedicated backhaul. Excellent whole-home coverage.",
+        "Sheet1 | Networking | ASUS ZenWiFi Pro ET12 | Tri-band Wi-Fi 6E mesh system with dedicated backhaul. Excellent whole-home coverage."
+      ],
+      "ground_truth": "The TP-Link Archer AXE75, ASUS ZenWiFi Pro ET12, and Netgear Orbi RBK863S all support Wi-Fi 6E with the 6GHz band for improved throughput and reduced interference."
+    },
+    {
+      "question": "Which monitors are designed for professional photo and video color work?",
+      "contexts": [
+        "Sheet1 | Electronics | BenQ PD3220U | 32\" 4K Thunderbolt 3 display for Mac and PC professionals. Excellent color accuracy.",
+        "Sheet1 | Electronics | BenQ PD3220U | 32\" 4K Thunderbolt 3 display for Mac and PC professionals. Excellent color accuracy.",
+        "Sheet1 | Electronics | ASUS ProArt PA279CV | 27\" 4K monitor with 100% sRGB and hardware calibration for creative professionals.",
+        "Sheet1 | Electronics | ASUS ProArt PA279CV | 27\" 4K monitor with 100% sRGB and hardware calibration for creative professionals.",
+        "Sheet1 | Electronics | ASUS ProArt PA279CV | 27\" 4K monitor with 100% sRGB and hardware calibration for creative professionals.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation.",
+        "Sheet1 | Electronics | Dell UltraSharp 27\" | 27\" 4K IPS monitor with factory-calibrated colors. Ideal for design and content creation."
+      ],
+      "ground_truth": "The Dell UltraSharp 27 with 99% sRGB, BenQ PD3220U with 100% sRGB, and ASUS ProArt PA279CV with 100% sRGB and hardware calibration are designed for professional color-accurate work."
+    },
+    {
+      "question": "What office chairs are suitable for larger or taller users?",
+      "contexts": [
+        "Sheet1 | Office Supplies | Secretlab Titan XL | Gaming chair with magnetic memory foam pillow and 4D armrests. Suitable for larger users.",
+        "Sheet1 | Office Supplies | Secretlab Titan XL | Gaming chair with magnetic memory foam pillow and 4D armrests. Suitable for larger users.",
+        "Sheet1 | Office Supplies | Secretlab Titan XL | Gaming chair with magnetic memory foam pillow and 4D armrests. Suitable for larger users.",
+        "Sheet1 | Office Supplies | Secretlab Titan XL | Gaming chair with magnetic memory foam pillow and 4D armrests. Suitable for larger users.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Autonomous ErgoChair Pro | Fully adjustable ergonomic chair with separate lumbar and headrest controls.",
+        "Sheet1 | Office Supplies | Fully Jarvis | Popular standing desk with bamboo top option and wide height range for tall users."
+      ],
+      "ground_truth": "The Secretlab Titan XL is specifically designed for larger users with a wider seat and higher weight capacity. The Steelcase Leap V2 and Herman Miller Aeron are also available in larger sizes."
+    },
+    {
+      "question": "Which products are currently discontinued or have limited stock?",
+      "contexts": [
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Uplift V2 | Premium standing desk with ANSI/BIFMA certified frame and extensive customization options.",
+        "Sheet1 | Office Supplies | Autonomous SmartDesk Pro | Affordable motorized standing desk with clean design and four memory presets.",
+        "Sheet1 | Office Supplies | Autonomous SmartDesk Pro | Affordable motorized standing desk with clean design and four memory presets.",
+        "Sheet1 | Office Supplies | Fully Jarvis | Popular standing desk with bamboo top option and wide height range for tall users.",
+        "Sheet1 | Office Supplies | Fully Jarvis | Popular standing desk with bamboo top option and wide height range for tall users.",
+        "Sheet1 | Office Supplies | IKEA Bekant | Classic office desk with optional underframe. Clean Scandinavian design at affordable price.",
+        "Sheet1 | Office Supplies | IKEA Bekant | Classic office desk with optional underframe. Clean Scandinavian design at affordable price.",
+        "Sheet1 | Office Supplies | IKEA Bekant | Classic office desk with optional underframe. Clean Scandinavian design at affordable price."
+      ],
+      "ground_truth": "Some products in the catalog have a status of Discontinued or Limited Stock, indicating they are no longer in regular production or are running low on inventory."
+    }
+  ],
+  "_lens": {
+    "pipeline": {
+      "vector": true,
+      "bm25": false,
+      "rrf": true,
+      "rerank": true
+    },
+    "k": 10,
+    "exported_at": "2026-04-28_01-39"
+  }
+}
