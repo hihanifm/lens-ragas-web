@@ -2,11 +2,21 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# Install lab CA cert (needed when npm goes through a forward proxy with SSL inspection).
+COPY certs/ /tmp/certs/
+RUN apk add --no-cache ca-certificates && \
+    if ls /tmp/certs/*.crt 2>/dev/null 1>&2; then \
+      cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ && \
+      update-ca-certificates; \
+    fi && rm -rf /tmp/certs
+
+# Tell Node to trust the updated system cert bundle.
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend/ .
 
 EXPOSE 37101
-CMD ["npm","run","dev","--","--host","0.0.0.0","--port","37101","--strictPort"]
-
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "37101", "--strictPort"]

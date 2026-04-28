@@ -1,0 +1,10 @@
+.git
+.env
+frontend/node_modules
+frontend/dist
+frontend/playwright-report
+frontend/test-results
+backend/.venv
+backend/uploads
+docs
+*.md
