@@ -2,12 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install lab CA cert (needed when npm goes through a forward proxy with SSL inspection).
+# Install lab CA cert — append directly to the existing bundle, no apk add needed.
+# (apk add would itself go through the proxy and fail before the cert is trusted.)
 COPY certs/ /tmp/certs/
-RUN apk add --no-cache ca-certificates && \
-    if ls /tmp/certs/*.crt 2>/dev/null 1>&2; then \
-      cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ && \
-      update-ca-certificates; \
+RUN if ls /tmp/certs/*.crt 2>/dev/null 1>&2; then \
+      cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; \
     fi && rm -rf /tmp/certs
 
 # Tell Node to trust the updated system cert bundle.
