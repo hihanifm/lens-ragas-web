@@ -1,17 +1,21 @@
 import json
 import pandas as pd
-from typing import Generator
+from typing import AsyncGenerator, Awaitable, Callable, Optional
 from ragas import EvaluationDataset, SingleTurnSample, evaluate
 from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 
-METRIC_MAP = {
-    "faithfulness": Faithfulness(),
-    "answer_relevancy": AnswerRelevancy(),
-    "context_precision": ContextPrecision(),
-    "context_recall": ContextRecall(),
-}
+def _new_metric(name: str):
+    if name == "faithfulness":
+        return Faithfulness()
+    if name == "answer_relevancy":
+        return AnswerRelevancy()
+    if name == "context_precision":
+        return ContextPrecision()
+    if name == "context_recall":
+        return ContextRecall()
+    raise KeyError(name)
 
 # Metrics that require an `answer` field
 ANSWER_REQUIRED = {"faithfulness", "answer_relevancy"}
@@ -82,7 +86,13 @@ def build_llm(req):
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
 
 
-def run_evaluation(filepath: str, req) -> Generator[str, None, None]:
+async def run_evaluation(
+    filepath: str,
+    req,
+    *,
+    is_disconnected: Optional[Callable[[], Awaitable[bool]]] = None,
+    batch_size: int = 1,
+) -> AsyncGenerator[str, None]:
     rows = load_rows(filepath)
     if not rows:
         raise ValueError("No rows found in file.")
@@ -114,30 +124,58 @@ def run_evaluation(filepath: str, req) -> Generator[str, None, None]:
         samples.append(sample)
 
     dataset = EvaluationDataset(samples=samples)
-    metrics = [METRIC_MAP[m] for m in selected]
-
-    for m in metrics:
-        m.llm = llm_wrapper
-        if hasattr(m, "embeddings"):
-            m.embeddings = emb_wrapper
-
     total = len(samples)
     yield _sse("start", {"total": total, "metrics": selected})
 
-    result = evaluate(dataset, metrics=metrics)
-    df = result.to_pandas()
+    if batch_size < 1:
+        batch_size = 1
 
-    for i, row_scores in enumerate(df.to_dict(orient="records")):
-        scores = {k: (None if pd.isna(v) else round(float(v), 4))
-                  for k, v in row_scores.items()
-                  if k in selected}
-        yield _sse("row", {
-            "index": i,
-            "question": rows[i].get("question", ""),
-            "scores": scores,
-        })
+    sums: dict[str, float] = {m: 0.0 for m in selected}
+    counts: dict[str, int] = {m: 0 for m in selected}
 
-    agg = {m: round(float(df[m].mean()), 4) for m in selected if m in df.columns}
+    for batch_start in range(0, total, batch_size):
+        if is_disconnected is not None and await is_disconnected():
+            return
+
+        batch_end = min(total, batch_start + batch_size)
+        batch_samples = samples[batch_start:batch_end]
+
+        metrics = [_new_metric(m) for m in selected]
+        for m in metrics:
+            m.llm = llm_wrapper
+            if hasattr(m, "embeddings"):
+                m.embeddings = emb_wrapper
+
+        batch_dataset = EvaluationDataset(samples=batch_samples)
+        result = evaluate(batch_dataset, metrics=metrics)
+        df = result.to_pandas()
+
+        for local_i, row_scores in enumerate(df.to_dict(orient="records")):
+            i = batch_start + local_i
+            scores: dict[str, float | None] = {}
+            for k in selected:
+                v = row_scores.get(k)
+                if v is None or pd.isna(v):
+                    scores[k] = None
+                    continue
+                fv = float(v)
+                sums[k] += fv
+                counts[k] += 1
+                scores[k] = round(fv, 4)
+
+            yield _sse(
+                "row",
+                {
+                    "index": i,
+                    "question": rows[i].get("question", ""),
+                    "scores": scores,
+                },
+            )
+
+    agg = {
+        m: (round(sums[m] / counts[m], 4) if counts[m] else None)
+        for m in selected
+    }
     yield _sse("complete", {"aggregate": agg, "total": total})
 
 

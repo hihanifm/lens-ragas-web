@@ -10,6 +10,13 @@ export default function App() {
   const [step, setStep] = useState('upload') // upload | configure | results | history
   const [parsedFile, setParsedFile] = useState(null)
   const [evalResults, setEvalResults] = useState(null)
+  const [evalRunning, setEvalRunning] = useState(false)
+  const [evalProgress, setEvalProgress] = useState(null) // { done, total } | null
+
+  function handleRunStateChange(running, progress) {
+    setEvalRunning(running)
+    setEvalProgress(running ? progress : null)
+  }
 
   function handleParsed(data) {
     setParsedFile(data)
@@ -62,20 +69,38 @@ export default function App() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={reset}
-              className="text-lg font-semibold text-gray-900 hover:underline underline-offset-4"
-              title="Home"
+              onClick={evalRunning ? undefined : reset}
+              disabled={evalRunning}
+              className="text-lg font-semibold text-gray-900 hover:underline underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+              title={evalRunning ? 'Evaluation in progress' : 'Home'}
             >
               LENS RAGAS Eval
             </button>
             <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
           </div>
-          <button
-            onClick={openHistory}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            History
-          </button>
+          <div className="flex items-center gap-3">
+            {evalRunning && evalProgress && (
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-1.5 bg-blue-500 rounded-full transition-all duration-300"
+                    style={{ width: evalProgress.total ? `${(evalProgress.done / evalProgress.total) * 100}%` : '0%' }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+                  {evalProgress.done}{evalProgress.total ? ` / ${evalProgress.total}` : ''}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={openHistory}
+              disabled={evalRunning}
+              title={evalRunning ? 'Evaluation in progress — cannot open History' : undefined}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              History
+            </button>
+          </div>
         </div>
       </header>
 
@@ -84,7 +109,12 @@ export default function App() {
 
         {step === 'upload' && <Upload onParsed={handleParsed} onLoadScores={handleLoadScores} />}
         {step === 'configure' && (
-          <Configure parsedFile={parsedFile} onResults={handleResults} onBack={reset} />
+          <Configure
+            parsedFile={parsedFile}
+            onResults={handleResults}
+            onBack={reset}
+            onRunStateChange={handleRunStateChange}
+          />
         )}
         {step === 'results' && (
           <Results results={evalResults} onReset={reset} />

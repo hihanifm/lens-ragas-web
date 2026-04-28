@@ -2,7 +2,7 @@ import os
 import uuid
 import json
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -103,14 +103,19 @@ async def parse_file(file: UploadFile = File(...)):
 
 
 @api.post("/evaluate")
-async def evaluate_endpoint(req: EvalRequest):
+async def evaluate_endpoint(req: EvalRequest, request: Request):
     filepath = os.path.join(config.UPLOAD_DIR, req.file_id)
     if not os.path.exists(filepath):
         raise HTTPException(404, "File not found. Please re-upload.")
 
-    def stream():
+    async def stream():
         try:
-            yield from run_evaluation(filepath, req)
+            async for chunk in run_evaluation(
+                filepath,
+                req,
+                is_disconnected=request.is_disconnected,
+            ):
+                yield chunk
         except Exception as e:
             import json as _json
             yield f"event: error\ndata: {_json.dumps({'message': str(e)})}\n\n"

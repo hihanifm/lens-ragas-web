@@ -13,7 +13,7 @@ clean-down-prod:
 
 up:
 	$(MAKE) clean-down-prod
-	docker compose up -d
+	docker compose up -d --build
 
 down:
 	docker compose down
@@ -78,10 +78,10 @@ e2e:
 	$(MAKE) e2e-up; \
 	echo "Waiting for API..."; \
 	for i in {1..60}; do \
-	  curl -fsS "http://localhost:37100/health" >/dev/null && break; \
+	  curl -fsS "http://localhost:37100/api/health" >/dev/null && break; \
 	  sleep 1; \
 	done; \
-	curl -fsS "http://localhost:37100/health" >/dev/null; \
+	curl -fsS "http://localhost:37100/api/health" >/dev/null; \
 	echo "Waiting for UI..."; \
 	for i in {1..60}; do \
 	  curl -fsS "http://localhost:37101/" >/dev/null && break; \

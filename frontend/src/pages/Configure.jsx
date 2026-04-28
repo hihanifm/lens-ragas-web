@@ -15,7 +15,7 @@ const METRIC_DESC = {
   context_recall: 'Did retrieval cover what was needed? (needs ground_truth)',
 }
 
-export default function Configure({ parsedFile, onResults, onBack }) {
+export default function Configure({ parsedFile, onResults, onBack, onRunStateChange }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
 
@@ -38,6 +38,14 @@ export default function Configure({ parsedFile, onResults, onBack }) {
     }).catch(() => {})
   }, [])
 
+  // Cancel stream and notify parent if this component is unmounted mid-run
+  useEffect(() => {
+    return () => {
+      cancelRef.current?.()
+      onRunStateChange?.(false, null)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function toggleMetric(m) {
     setSelectedMetrics(prev =>
       prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
@@ -48,7 +56,9 @@ export default function Configure({ parsedFile, onResults, onBack }) {
     if (!selectedMetrics.length) return
     setError(null)
     setRunning(true)
-    setProgress({ done: 0, total: null })
+    const initialProgress = { done: 0, total: null }
+    setProgress(initialProgress)
+    onRunStateChange?.(true, initialProgress)
 
     const rows = []
 
@@ -63,15 +73,22 @@ export default function Configure({ parsedFile, onResults, onBack }) {
     }
 
     cancelRef.current = streamEvaluation(req, {
-      onStart: ({ total, metrics }) => {
-        setProgress({ done: 0, total })
+      onStart: ({ total }) => {
+        const p = { done: 0, total }
+        setProgress(p)
+        onRunStateChange?.(true, p)
       },
       onRow: (row) => {
         rows.push(row)
-        setProgress(p => ({ ...p, done: rows.length }))
+        setProgress(p => {
+          const next = { ...p, done: rows.length }
+          onRunStateChange?.(true, next)
+          return next
+        })
       },
       onComplete: ({ aggregate, total }) => {
         setRunning(false)
+        onRunStateChange?.(false, null)
         onResults(
           { rows, aggregate, metrics: selectedMetrics, total },
           {
@@ -90,6 +107,7 @@ export default function Configure({ parsedFile, onResults, onBack }) {
       },
       onError: (msg) => {
         setRunning(false)
+        onRunStateChange?.(false, null)
         setError(msg)
       },
     })
@@ -99,6 +117,7 @@ export default function Configure({ parsedFile, onResults, onBack }) {
     cancelRef.current?.()
     setRunning(false)
     setProgress(null)
+    onRunStateChange?.(false, null)
   }
 
   return (

@@ -58,6 +58,49 @@ export default function Results({ results, onReset }) {
         </div>
       </div>
 
+      {/* LENS export metadata */}
+      {meta?.lens_metadata && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <details>
+            <summary className="text-sm font-semibold text-gray-900 cursor-pointer select-none hover:text-gray-700">
+              Export metadata
+            </summary>
+            <div className="mt-3 text-xs text-gray-600 space-y-1">
+              {meta.lens_metadata.exported_at && (
+                <div>
+                  <span className="text-gray-500">exported_at</span>{' '}
+                  <span className="font-mono text-gray-700">{meta.lens_metadata.exported_at}</span>
+                </div>
+              )}
+              {meta.lens_metadata.k != null && (
+                <div>
+                  <span className="text-gray-500">k</span>{' '}
+                  <span className="font-mono text-gray-700">{String(meta.lens_metadata.k)}</span>
+                </div>
+              )}
+              {meta.lens_metadata.pipeline && typeof meta.lens_metadata.pipeline === 'object' && (
+                <div>
+                  <span className="text-gray-500">pipeline</span>{' '}
+                  <span className="font-mono text-gray-700">
+                    {Object.entries(meta.lens_metadata.pipeline)
+                      .map(([k, v]) => `${k}=${String(v)}`)
+                      .join(' ')}
+                  </span>
+                </div>
+              )}
+              <details className="pt-1">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">
+                  View raw JSON
+                </summary>
+                <pre className="mt-2 text-[11px] leading-4 overflow-auto bg-gray-50 border border-gray-200 rounded p-2 text-gray-700">
+                  {JSON.stringify(meta.lens_metadata, null, 2)}
+                </pre>
+              </details>
+            </div>
+          </details>
+        </div>
+      )}
+
       {/* Per-row table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
