@@ -2,6 +2,8 @@ import os
 import uuid
 import json
 import pandas as pd
+import urllib.parse
+import urllib.request
 from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -54,6 +56,78 @@ def get_config():
         "openai_api_key": config.OPENAI_API_KEY,
         "openai_model": config.OPENAI_MODEL,
     }
+
+@api.get("/ollama/models")
+def list_ollama_models(base_url: str | None = None):
+    """
+    Returns available Ollama model tags from /api/tags.
+    """
+    url = (base_url or config.OLLAMA_BASE_URL or "").strip()
+    if not url:
+        raise HTTPException(400, "Missing base_url.")
+
+    url = url.rstrip("/")
+    # In Docker, localhost/127.0.0.1 points to the container, not the host.
+    if os.path.exists("/.dockerenv"):
+        if url.startswith("http://localhost:") or url.startswith("http://127.0.0.1:"):
+            url = url.replace("http://localhost:", "http://host.docker.internal:")
+            url = url.replace("http://127.0.0.1:", "http://host.docker.internal:")
+        if url == "http://localhost" or url == "http://127.0.0.1":
+            url = "http://host.docker.internal:11434"
+
+    tags_url = urllib.parse.urljoin(url + "/", "api/tags")
+
+    try:
+        req = urllib.request.Request(tags_url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(502, f"Failed to fetch Ollama models: {e}")
+
+    models = payload.get("models", [])
+    names: list[str] = []
+    if isinstance(models, list):
+        for m in models:
+            if isinstance(m, dict) and isinstance(m.get("name"), str):
+                names.append(m["name"])
+
+    return {"models": sorted(set(names))}
+
+@api.get("/openai/models")
+def list_openai_models(request: Request):
+    """
+    Fetch available OpenAI models from /v1/models.
+    API key can be provided via `X-OpenAI-Api-Key` header; falls back to env default.
+    """
+    api_key = (request.headers.get("x-openai-api-key") or config.OPENAI_API_KEY or "").strip()
+    if not api_key:
+        raise HTTPException(400, "Missing OpenAI API key.")
+
+    url = "https://api.openai.com/v1/models"
+    try:
+        req = urllib.request.Request(
+            url,
+            method="GET",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(502, f"Failed to fetch OpenAI models: {e}")
+
+    data = payload.get("data", [])
+    ids: list[str] = []
+    if isinstance(data, list):
+        for m in data:
+            if isinstance(m, dict) and isinstance(m.get("id"), str):
+                ids.append(m["id"])
+
+    # Keep it simple: show common chat/reasoning models first, but still include everything.
+    ids = sorted(set(ids))
+    preferred_prefixes = ("gpt-", "o1", "o3")
+    preferred = [x for x in ids if x.startswith(preferred_prefixes)]
+    rest = [x for x in ids if x not in set(preferred)]
+    return {"models": preferred + rest}
 
 
 @api.post("/parse", response_model=ParsedFile)

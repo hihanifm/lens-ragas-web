@@ -16,6 +16,18 @@ export async function parseFile(file) {
   return data
 }
 
+export async function fetchOllamaModels(baseUrl) {
+  const { data } = await api.get('/ollama/models', { params: { base_url: baseUrl } })
+  return data?.models || []
+}
+
+export async function fetchOpenAIModels(apiKey) {
+  const { data } = await api.get('/openai/models', {
+    headers: apiKey ? { 'X-OpenAI-Api-Key': apiKey } : undefined,
+  })
+  return data?.models || []
+}
+
 export async function startEvaluationJob(req) {
   const { data } = await api.post('/evaluate/start', req)
   return data?.job_id

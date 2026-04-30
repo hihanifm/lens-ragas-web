@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { fetchConfig } from '../api/client'
+import { fetchConfig, fetchOllamaModels, fetchOpenAIModels } from '../api/client'
 
 const METRIC_LABELS = {
   faithfulness: 'Faithfulness',
@@ -20,8 +20,12 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
 
   const [ollamaModel, setOllamaModel] = useState('llama3.2')
+  const [ollamaModels, setOllamaModels] = useState([])
+  const [ollamaModelsStatus, setOllamaModelsStatus] = useState({ loading: false, error: null })
   const [openaiKey, setOpenaiKey] = useState('')
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini')
+  const [openaiModels, setOpenaiModels] = useState([])
+  const [openaiModelsStatus, setOpenaiModelsStatus] = useState({ loading: false, error: null })
   const [selectedMetrics, setSelectedMetrics] = useState(parsedFile.available_metrics)
   const [error, setError] = useState(null)
   const [starting, setStarting] = useState(false)
@@ -36,6 +40,64 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
       if (cfg.openai_model) setOpenaiModel(cfg.openai_model)
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (provider !== 'ollama') return
+    let cancelled = false
+    setOllamaModelsStatus({ loading: true, error: null })
+    fetchOllamaModels(ollamaUrl)
+      .then(models => {
+        if (cancelled) return
+        setOllamaModels(Array.isArray(models) ? models : [])
+        setOllamaModelsStatus({ loading: false, error: null })
+      })
+      .catch(err => {
+        if (cancelled) return
+        setOllamaModels([])
+        setOllamaModelsStatus({
+          loading: false,
+          error: err?.response?.data?.detail || err?.message || 'Failed to load models',
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [provider, ollamaUrl])
+
+  useEffect(() => {
+    if (provider !== 'openai') return
+    const key = String(openaiKey || '').trim()
+    if (!key) {
+      setOpenaiModels([])
+      setOpenaiModelsStatus({ loading: false, error: null })
+      return
+    }
+
+    let cancelled = false
+    setOpenaiModelsStatus({ loading: true, error: null })
+
+    const t = setTimeout(() => {
+      fetchOpenAIModels(key)
+        .then(models => {
+          if (cancelled) return
+          setOpenaiModels(Array.isArray(models) ? models : [])
+          setOpenaiModelsStatus({ loading: false, error: null })
+        })
+        .catch(err => {
+          if (cancelled) return
+          setOpenaiModels([])
+          setOpenaiModelsStatus({
+            loading: false,
+            error: err?.response?.data?.detail || err?.message || 'Failed to load models',
+          })
+        })
+    }, 400) // small debounce for typing
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [provider, openaiKey])
 
   function toggleMetric(m) {
     setSelectedMetrics(prev =>
@@ -186,12 +248,80 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
         {provider === 'ollama' ? (
           <div className="space-y-3">
             <Field label="Base URL" value={ollamaUrl} onChange={setOllamaUrl} placeholder="http://localhost:11434" />
-            <Field label="Model" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3.2" />
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+              {ollamaModelsStatus.loading ? (
+                <div className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2 bg-gray-50">
+                  Loading models...
+                </div>
+              ) : ollamaModels.length ? (
+                <select
+                  value={ollamaModels.includes(ollamaModel) ? ollamaModel : '__custom__'}
+                  onChange={e => {
+                    const v = e.target.value
+                    if (v === '__custom__') return
+                    setOllamaModel(v)
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {ollamaModels.map(m => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom…</option>
+                </select>
+              ) : (
+                <Field label="Model" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3.2" />
+              )}
+              {ollamaModelsStatus.error && (
+                <div className="mt-1 text-xs text-amber-700">Couldn’t load models: {ollamaModelsStatus.error}</div>
+              )}
+              {!ollamaModelsStatus.loading && ollamaModels.length && !ollamaModels.includes(ollamaModel) && (
+                <div className="mt-2">
+                  <Field label="Custom model" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3.2" />
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
             <Field label="API Key" value={openaiKey} onChange={setOpenaiKey} placeholder="sk-..." type="password" />
-            <Field label="Model" value={openaiModel} onChange={setOpenaiModel} placeholder="gpt-4o-mini" />
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+              {openaiModelsStatus.loading ? (
+                <div className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2 bg-gray-50">
+                  Loading models...
+                </div>
+              ) : openaiModels.length ? (
+                <select
+                  value={openaiModels.includes(openaiModel) ? openaiModel : '__custom__'}
+                  onChange={e => {
+                    const v = e.target.value
+                    if (v === '__custom__') return
+                    setOpenaiModel(v)
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {openaiModels.map(m => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom…</option>
+                </select>
+              ) : (
+                <Field label="Model" value={openaiModel} onChange={setOpenaiModel} placeholder="gpt-4o-mini" />
+              )}
+              {openaiModelsStatus.error && (
+                <div className="mt-1 text-xs text-amber-700">Couldn’t load models: {openaiModelsStatus.error}</div>
+              )}
+              {!openaiModelsStatus.loading && openaiModels.length && !openaiModels.includes(openaiModel) && (
+                <div className="mt-2">
+                  <Field label="Custom model" value={openaiModel} onChange={setOpenaiModel} placeholder="gpt-4o-mini" />
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
