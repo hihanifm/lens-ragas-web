@@ -118,6 +118,7 @@ export default function Upload({ onParsed, onLoadScores }) {
   const [error, setError] = useState(null)
   const [preview, setPreview] = useState(null) // { columns: string[], rows: object[] }
   const [parsedReady, setParsedReady] = useState(null) // parsedFile payload to pass to Configure
+  const [project, setProject] = useState(() => localStorage.getItem('lens-ragas-web:project:v1') || '')
 
   async function handleFile(file) {
     if (!file) return
@@ -207,6 +208,28 @@ export default function Upload({ onParsed, onLoadScores }) {
         <code className="bg-gray-100 px-1 rounded">ground_truth</code>,{' '}
         <code className="bg-gray-100 px-1 rounded">answer</code> (optional)
       </p>
+
+      <div className="mb-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">Project (optional)</h3>
+        <p className="text-xs text-gray-500 mb-2">
+          Use the same project name on multiple PCs to group runs together on the server. Leave blank for the default
+          project.
+        </p>
+        <input
+          value={project}
+          onChange={e => {
+            const v = e.target.value
+            setProject(v)
+            try {
+              localStorage.setItem('lens-ragas-web:project:v1', v || '')
+            } catch {
+              // ignore
+            }
+          }}
+          placeholder="default"
+          className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
       <div
         className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors

@@ -19,7 +19,6 @@ const METRIC_DESC = {
 export default function Configure({ parsedFile, onStartRun, onOpenResults, onBack }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
-  const [project, setProject] = useState(() => localStorage.getItem('lens-ragas-web:project:v1') || '')
 
   const [ollamaModel, setOllamaModel] = useState('llama3.2')
   const [ollamaModels, setOllamaModels] = useState([])
@@ -146,11 +145,12 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
     setStarting(true)
     startedCountRef.current += 1
 
+    const projectValue = String(localStorage.getItem('lens-ragas-web:project:v1') || '').trim()
     const req = {
       file_id: parsedFile.file_id,
       metrics: selectedMetrics,
       llm_provider: provider,
-      project: project || undefined,
+      project: projectValue || undefined,
       ollama_base_url: ollamaUrl,
       ollama_model: ollamaModel,
       openai_api_key: openaiKey || undefined,
@@ -171,7 +171,6 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
     }
 
     try {
-      localStorage.setItem('lens-ragas-web:project:v1', project || '')
       const out = await onStartRun?.(req, meta)
       if (out?.runId) setActiveRunId(out.runId)
     } catch (e) {
@@ -368,14 +367,6 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
             </div>
           </div>
         )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Project (optional)</h3>
-        <p className="text-xs text-gray-500 mb-2">
-          Use the same project name on multiple PCs to group runs together on the server. Leave blank for the default project.
-        </p>
-        <Field label="Project" value={project} onChange={setProject} placeholder="default" />
       </div>
 
       {/* Progress / error */}

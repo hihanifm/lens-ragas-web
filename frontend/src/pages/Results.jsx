@@ -11,6 +11,7 @@ const METRIC_LABELS = {
 export default function Results({ results, onReset }) {
   const [current, setCurrent] = useState(results)
   const [expanded, setExpanded] = useState(() => new Set())
+  const [activePane, setActivePane] = useState('results') // results | stats
 
   useEffect(() => {
     setCurrent(results)
@@ -46,6 +47,8 @@ export default function Results({ results, onReset }) {
   const stats = meta?.stats || current?.stats || null
   const elapsedMs = stats?.elapsed_ms
   const llmCalls = stats?.llm_calls
+  const promptTokens = stats?.prompt_tokens
+  const completionTokens = stats?.completion_tokens
   const totalTokens = stats?.total_tokens
   const costUsd = stats?.cost_usd
 
@@ -137,6 +140,88 @@ export default function Results({ results, onReset }) {
         </div>
       )}
 
+      {/* Panes */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setActivePane('results')}
+          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+            activePane === 'results'
+              ? 'bg-gray-900 text-white border-gray-900'
+              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          Results
+        </button>
+        <button
+          type="button"
+          onClick={() => setActivePane('stats')}
+          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+            activePane === 'stats'
+              ? 'bg-gray-900 text-white border-gray-900'
+              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          Stats
+        </button>
+      </div>
+
+      {activePane === 'stats' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5" data-testid="results-stats-pane">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Stats</h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Status" value={String(status || '—')} />
+            <StatCard
+              label="Rows"
+              value={
+                expectedTotal != null ? `${rows.length} / ${expectedTotal}` : rows?.length != null ? String(rows.length) : '—'
+              }
+            />
+            <StatCard label="Latency" value={elapsedMs != null ? `${(elapsedMs / 1000).toFixed(1)}s` : '—'} />
+            <StatCard label="LLM calls" value={llmCalls != null ? String(llmCalls) : '—'} />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Prompt tokens" value={promptTokens != null ? String(promptTokens) : '—'} />
+            <StatCard label="Completion tokens" value={completionTokens != null ? String(completionTokens) : '—'} />
+            <StatCard label="Total tokens" value={totalTokens != null ? String(totalTokens) : '—'} />
+            <StatCard
+              label="Cost"
+              value={costUsd != null ? `$${Number(costUsd).toFixed(4)}` : '—'}
+            />
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="border border-gray-200 rounded-lg p-4">
+              <p className="text-xs font-medium text-gray-500 mb-2">Models / endpoint</p>
+              <div className="text-sm text-gray-800 space-y-1">
+                <KeyVal k="provider" v={meta?.llm_provider || meta?.provider} />
+                <KeyVal k="ollama_model" v={meta?.ollama_model} />
+                <KeyVal k="openai_model" v={meta?.openai_model} />
+                <KeyVal k="ollama_base_url" v={meta?.ollama_base_url} />
+                <KeyVal k="project" v={meta?.project} />
+              </div>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-4">
+              <p className="text-xs font-medium text-gray-500 mb-2">Reliability</p>
+              <div className="text-sm text-gray-800 space-y-1">
+                <KeyVal k="stream_disconnected" v={streamDisconnected ? 'true' : 'false'} />
+                <KeyVal k="error" v={meta?.error} />
+                <KeyVal k="job_id" v={meta?.job_id} />
+                <KeyVal k="input_filename" v={meta?.input_filename} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-500">
+            Stats are persisted on the server per run (when available) and may appear a moment after completion.
+          </div>
+        </div>
+      )}
+
+      {activePane === 'results' && (
+        <>
       {/* Aggregate summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-5" data-testid="results-aggregate">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">
@@ -290,6 +375,27 @@ export default function Results({ results, onReset }) {
           Export CSV
         </button>
       </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="bg-gray-50 rounded-lg px-4 py-3">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="text-sm font-semibold text-gray-900 mt-1 tabular-nums">{value}</p>
+    </div>
+  )
+}
+
+function KeyVal({ k, v }) {
+  if (v == null || String(v).trim() === '') return null
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-gray-500 text-xs font-mono shrink-0">{k}</span>
+      <span className="text-gray-800 text-xs font-mono break-all">{String(v)}</span>
     </div>
   )
 }

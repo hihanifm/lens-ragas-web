@@ -128,6 +128,15 @@ export default function App() {
         runMeta.status = 'complete'
         runMeta.progress = { done: run.results.total, total: run.results.total }
         saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+        // SSE completion doesn't include run stats; fetch a final snapshot so Results can show latency/tokens/calls.
+        fetchEvaluationResult(jobId)
+          .then(snap => {
+            if (snap?.stats) {
+              runMeta.stats = snap.stats
+              saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+            }
+          })
+          .catch(() => {})
         finalizeOnce()
       },
       onError: msg => {
