@@ -8,6 +8,24 @@ from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, Conte
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 
+def _row_extra_fields(src: dict) -> dict:
+    """Fields from the input row for display in the UI (not from ragas scores)."""
+    ctx = src.get("contexts", [])
+    if isinstance(ctx, str):
+        try:
+            ctx = json.loads(ctx)
+        except Exception:
+            ctx = [ctx]
+    elif not isinstance(ctx, list):
+        ctx = list(ctx) if ctx else []
+    out: dict = {"contexts": ctx}
+    if "ground_truth" in src:
+        out["ground_truth"] = src.get("ground_truth")
+    if "answer" in src:
+        out["answer"] = src.get("answer")
+    return out
+
+
 def _new_metric(name: str):
     if name == "faithfulness":
         return Faithfulness()
@@ -186,14 +204,13 @@ async def run_evaluation(
                 counts[k] += 1
                 scores[k] = round(fv, 4)
 
-            yield _sse(
-                "row",
-                {
-                    "index": i,
-                    "question": rows[i].get("question", ""),
-                    "scores": scores,
-                },
-            )
+            payload = {
+                "index": i,
+                "question": rows[i].get("question", ""),
+                "scores": scores,
+                **_row_extra_fields(rows[i]),
+            }
+            yield _sse("row", payload)
 
     agg = {
         m: (round(sums[m] / counts[m], 4) if counts[m] else None)

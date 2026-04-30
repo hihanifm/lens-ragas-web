@@ -42,15 +42,23 @@ export default function Results({ results, onReset }) {
     status === 'running' ||
     (!isFinal && expectedTotal != null && rows.length < expectedTotal)
 
+  function escapeCsvField(value) {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`
+  }
+
   function exportCsv() {
-    const header = ['question', ...metrics, 'lens_metadata'].join(',')
-    const lines = rows.map(r =>
-      [
-        `"${(r.question || '').replace(/"/g, '""')}"`,
+    const header = ['question', ...metrics, 'ground_truth', 'contexts', 'answer', 'lens_metadata'].join(',')
+    const lines = rows.map(r => {
+      const ctxJson = JSON.stringify(Array.isArray(r.contexts) ? r.contexts : [])
+      return [
+        escapeCsvField(r.question),
         ...metrics.map(m => r.scores[m] ?? ''),
+        escapeCsvField(r.ground_truth),
+        escapeCsvField(ctxJson),
+        escapeCsvField(r.answer),
         '',
       ].join(',')
-    )
+    })
     let metaJson = ''
     if (meta?.lens_metadata) {
       try {
@@ -60,9 +68,14 @@ export default function Results({ results, onReset }) {
       }
     }
 
-    const aggLine = ['"AGGREGATE"', ...metrics.map(m => aggregate[m] ?? ''), metaJson ? `"${metaJson}"` : ''].join(
-      ','
-    )
+    const aggLine = [
+      '"AGGREGATE"',
+      ...metrics.map(m => aggregate[m] ?? ''),
+      '""',
+      '""',
+      '""',
+      metaJson ? `"${metaJson}"` : '',
+    ].join(',')
 
     const csv = [header, ...lines, aggLine].join('\n')
 
@@ -163,13 +176,18 @@ export default function Results({ results, onReset }) {
       {/* Per-row table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-max min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">#</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Question</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 w-10">#</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[200px]">Question</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px]">Ground truth</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[220px]">
+                  Retrieved contexts
+                </th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px]">Response</th>
                 {metrics.map(m => (
-                  <th key={m} className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                  <th key={m} className="text-center px-3 py-3 font-medium text-gray-600 whitespace-nowrap w-28">
                     {METRIC_LABELS[m] || m}
                   </th>
                 ))}
@@ -177,14 +195,34 @@ export default function Results({ results, onReset }) {
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-400">{i + 1}</td>
-                  <td className="px-4 py-3 text-gray-800 whitespace-normal min-w-[280px]">
-                    {row.question}
+                <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 align-top">
+                  <td className="px-3 py-3 text-gray-400 tabular-nums">{i + 1}</td>
+                  <td className="px-3 py-3 align-top min-w-[200px] max-w-md">
+                    <div className="text-xs text-gray-800 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                      {row.question || '—'}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
+                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                      {cellOrDash(row.ground_truth)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top min-w-[220px] max-w-lg">
+                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                      {formatContextsCell(row.contexts)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
+                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                      {cellOrDash(row.answer)}
+                    </div>
                   </td>
                   {metrics.map(m => (
-                    <td key={m} className={`px-4 py-3 text-center font-medium ${scoreColor(row.scores[m])}`}>
-                      {row.scores[m] != null ? row.scores[m].toFixed(3) : '—'}
+                    <td
+                      key={m}
+                      className={`px-3 py-3 text-center text-xs font-medium align-middle ${scoreColor(row.scores?.[m])}`}
+                    >
+                      {row.scores?.[m] != null ? row.scores[m].toFixed(3) : '—'}
                     </td>
                   ))}
                 </tr>
@@ -229,4 +267,15 @@ function scoreColor(val) {
   if (val >= 0.8) return 'text-green-600'
   if (val >= 0.5) return 'text-amber-600'
   return 'text-red-600'
+}
+
+function cellOrDash(v) {
+  if (v == null || String(v).trim() === '') return '—'
+  return String(v)
+}
+
+function formatContextsCell(ctx) {
+  if (ctx == null) return '—'
+  if (!Array.isArray(ctx) || ctx.length === 0) return '—'
+  return ctx.map((c, i) => `(${i + 1}) ${c}`).join('\n\n')
 }

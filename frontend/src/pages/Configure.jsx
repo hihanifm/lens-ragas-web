@@ -16,7 +16,7 @@ const METRIC_DESC = {
   context_recall: 'Did retrieval cover what was needed? (needs ground_truth)',
 }
 
-export default function Configure({ parsedFile, onStartRun, onBack }) {
+export default function Configure({ parsedFile, onStartRun, onOpenResults, onBack }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
 
@@ -104,17 +104,20 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
 
   useEffect(() => {
     if (!activeRunId) return
+    let stopped = false
+    let id
     const tick = () => {
       const run = loadHistory().find(r => r.id === activeRunId)
       setRunPoll(p => p + 1)
       if (!run) return
       const s = run?.meta?.status
-      if (s && s !== 'running') {
-        setActiveRunId(null)
+      if (!stopped && s && s !== 'running') {
+        stopped = true
+        clearInterval(id)
       }
     }
     tick()
-    const id = setInterval(tick, 1000)
+    id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [activeRunId])
 
@@ -127,6 +130,18 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
   async function handleRun() {
     if (!selectedMetrics.length) return
     setError(null)
+
+    const active = activeRunId ? loadHistory().find(r => r.id === activeRunId) : null
+    const isAnotherRun = active && active?.meta?.status === 'running'
+    if (
+      isAnotherRun &&
+      !window.confirm(
+        'An evaluation is already running. Start another run in parallel? It will create a new entry in History.',
+      )
+    ) {
+      return
+    }
+
     setStarting(true)
     startedCountRef.current += 1
 
@@ -166,6 +181,8 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
   void runPoll
   const activeRun = activeRunId ? loadHistory().find(r => r.id === activeRunId) : null
   const showRunBanner = activeRun && activeRun?.meta?.status === 'running'
+  const runCtaLabel = starting ? 'Starting...' : showRunBanner ? 'Start another run' : 'Run Evaluation'
+  const canOpenCurrent = Boolean(activeRunId && activeRun?.results)
 
   return (
     <div className="space-y-6">
@@ -373,12 +390,27 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
           className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           Back
         </button>
+        <button
+          type="button"
+          onClick={() => onOpenResults?.(activeRun?.results)}
+          disabled={!canOpenCurrent}
+          className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          title={canOpenCurrent ? 'Open results for the current run' : 'Start an evaluation first'}
+        >
+          Go to results
+        </button>
         <button onClick={handleRun} disabled={starting || !selectedMetrics.length}
           data-testid="run-evaluation"
           className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
-          {starting ? 'Starting...' : 'Run Evaluation'}
+          {runCtaLabel}
         </button>
       </div>
+      {showRunBanner && (
+        <p className="text-xs text-gray-500">
+          Tip: You can run multiple evaluations (for example, different models). Each run is saved separately in{' '}
+          <span className="font-medium">History</span>.
+        </p>
+      )}
     </div>
   )
 }

@@ -160,8 +160,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <header className="bg-white border-b border-gray-200 py-4">
+        <div className="w-[90vw] mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -185,7 +185,9 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 w-full flex-1">
+      <main
+        className="w-[90vw] mx-auto py-8 flex-1"
+      >
         <Steps current={step} />
 
         {step === 'upload' && <Upload onParsed={handleParsed} onLoadScores={handleLoadScores} />}
@@ -193,6 +195,11 @@ export default function App() {
           <Configure
             parsedFile={parsedFile}
             onStartRun={startRun}
+            onOpenResults={res => {
+              if (!res) return
+              setEvalResults(res)
+              setStep('results')
+            }}
             onBack={reset}
           />
         )}

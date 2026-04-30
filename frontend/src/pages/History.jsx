@@ -145,7 +145,16 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
                             Open
                           </button>
                           <button
-                            onClick={() => void handleDelete(run.id)}
+                            onClick={() => {
+                              if (
+                                !window.confirm(
+                                  'Remove this run from history? This only affects saved entries in this browser.',
+                                )
+                              ) {
+                                return
+                              }
+                              void handleDelete(run.id)
+                            }}
                             className="px-3 py-1.5 text-sm font-medium bg-red-50 border border-red-300 rounded-lg text-red-700 shadow-sm hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                           >
                             Delete

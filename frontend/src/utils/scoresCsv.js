@@ -39,6 +39,17 @@ function toNumberOrNull(v) {
   return Number.isFinite(n) ? n : null
 }
 
+function parseContextsCell(v) {
+  if (v == null || String(v).trim() === '') return []
+  const s = String(v).trim()
+  try {
+    const p = JSON.parse(s)
+    return Array.isArray(p) ? p : p != null ? [String(p)] : []
+  } catch {
+    return [s]
+  }
+}
+
 export function parseExportedScoresCsv(text) {
   const lines = String(text || '')
     .replace(/\r\n/g, '\n')
@@ -81,9 +92,11 @@ export function parseExportedScoresCsv(text) {
   }
 
   const lensMetaIdx = header.indexOf('lens_metadata')
-  const metrics = header
-    .slice(1)
-    .filter(c => c && c !== 'lens_metadata')
+  const reserved = new Set(['lens_metadata', 'ground_truth', 'contexts', 'answer'])
+  const metrics = header.slice(1).filter(c => c && !reserved.has(c))
+  const gtIdx = header.indexOf('ground_truth')
+  const ctxIdx = header.indexOf('contexts')
+  const ansIdx = header.indexOf('answer')
   const rows = []
   let aggregate = {}
 
@@ -107,7 +120,11 @@ export function parseExportedScoresCsv(text) {
         }
       }
     } else {
-      rows.push({ index: rows.length, question: q, scores })
+      const rec = { index: rows.length, question: q, scores }
+      if (gtIdx >= 0) rec.ground_truth = cols[gtIdx] ?? ''
+      if (ctxIdx >= 0) rec.contexts = parseContextsCell(cols[ctxIdx])
+      if (ansIdx >= 0) rec.answer = cols[ansIdx] ?? ''
+      rows.push(rec)
     }
   }
 
