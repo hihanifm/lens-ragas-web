@@ -37,8 +37,39 @@ set -euo pipefail
 
 echo "== Dual-remote setup (public upstream + private origin) =="
 
-read -r -p "Public GitHub repo URL (fetch-only, e.g. https://github.com/org/repo.git): " PUBLIC_URL
-read -r -p "Private/internal GitHub repo URL (push target): " PRIVATE_URL
+# Auto-detect the public URL from an existing clone when possible:
+# - public: github.com
+# - private/internal: github.<corp>.com (or anything not github.com)
+PUBLIC_URL=""
+PRIVATE_URL=""
+
+if git remote get-url origin >/dev/null 2>&1; then
+  ORIGIN_URL="$(git remote get-url origin)"
+  if [[ "$ORIGIN_URL" == *"github.com"* ]]; then
+    PUBLIC_URL="$ORIGIN_URL"
+  else
+    PRIVATE_URL="$ORIGIN_URL"
+  fi
+fi
+
+if [[ -z "$PUBLIC_URL" ]] && git remote get-url upstream >/dev/null 2>&1; then
+  UPSTREAM_URL="$(git remote get-url upstream)"
+  if [[ "$UPSTREAM_URL" == *"github.com"* ]]; then
+    PUBLIC_URL="$UPSTREAM_URL"
+  fi
+fi
+
+if [[ -z "$PUBLIC_URL" ]]; then
+  read -r -p "Public GitHub repo URL (github.com, fetch-only): " PUBLIC_URL
+else
+  echo "Detected public repo: $PUBLIC_URL"
+fi
+
+if [[ -z "$PRIVATE_URL" ]]; then
+  read -r -p "Private/internal GitHub repo URL (github.<corp>.com, push target): " PRIVATE_URL
+else
+  echo "Detected private repo: $PRIVATE_URL"
+fi
 
 DEFAULT_BASE_BRANCH="main"
 read -r -p "Base branch name [${DEFAULT_BASE_BRANCH}]: " BASE_BRANCH
