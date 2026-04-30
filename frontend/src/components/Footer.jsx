@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_BASE } from '../utils/basePath'
+import { API_BASE, BASE_PATH } from '../utils/basePath'
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 const GITHUB_URL = typeof __GITHUB_URL__ !== 'undefined' ? __GITHUB_URL__ : null
@@ -84,6 +84,22 @@ export default function Footer() {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          <a
+            href={`${BASE_PATH}/slides.html`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-gray-600 hover:text-gray-900 hover:underline"
+          >
+            Learn more
+          </a>
+          <a
+            href="https://www.ragas.io/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-gray-600 hover:text-gray-900 hover:underline"
+          >
+            Ragas
+          </a>
           {GITHUB_URL && (
             <a
               href={GITHUB_URL}

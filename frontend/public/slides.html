@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluating RAG with RAGAS — LENS Lab</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f8f9fb;
+    --surface:  #ffffff;
+    --border:   #e4e7ed;
+    --text:     #1a1d23;
+    --muted:    #6b7280;
+    --accent:   #3b6ef5;
+    --accent2:  #0ea5e9;
+    --green:    #16a34a;
+    --amber:    #d97706;
+    --red:      #dc2626;
+    --tag-bg:   #eff3ff;
+    --tag-text: #3b6ef5;
+    --code-bg:  #f3f4f8;
+    --shadow:   0 2px 16px rgba(0,0,0,.07);
+  }
+
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+
+  /* ── Deck ── */
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 56px 72px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .35s ease, transform .35s ease;
+    transform: translateX(40px);
+  }
+  .slide.active  { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .slide.exiting { opacity: 0; transform: translateX(-40px); }
+
+  /* ── Layout helpers ── */
+  .slide-inner { width: 100%; max-width: 960px; }
+  .col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .col3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* ── Typography ── */
+  .eyebrow { font-size: .75rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  h1 { font-size: 2.6rem; font-weight: 700; line-height: 1.15; color: var(--text); }
+  h2 { font-size: 1.9rem; font-weight: 700; line-height: 1.2; margin-bottom: 24px; }
+  h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+  p, li { font-size: 1.05rem; line-height: 1.65; color: var(--text); }
+  .muted { color: var(--muted); }
+  .subtitle { font-size: 1.2rem; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  ul { list-style: none; }
+  ul li { padding-left: 1.4em; position: relative; margin-bottom: .4em; }
+  ul li::before { content: "›"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .card.accent-top { border-top: 3px solid var(--accent); }
+  .card.green-top  { border-top: 3px solid var(--green); }
+  .card.amber-top  { border-top: 3px solid var(--amber); }
+  .card.red-top    { border-top: 3px solid var(--red); }
+  .card.sky-top    { border-top: 3px solid var(--accent2); }
+
+  /* ── Tags ── */
+  .tag { display: inline-block; background: var(--tag-bg); color: var(--tag-text); font-size: .75rem; font-weight: 600; padding: 2px 9px; border-radius: 99px; margin-right: 4px; }
+  .tag.green { background:#dcfce7; color: var(--green); }
+  .tag.amber { background:#fef3c7; color: var(--amber); }
+  .tag.red   { background:#fee2e2; color: var(--red); }
+
+  /* ── Code ── */
+  pre, code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: .87rem; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; overflow-x: auto; line-height: 1.6; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+
+  /* ── Metric formula ── */
+  .formula { font-size: 1rem; background: var(--code-bg); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 16px; margin: 10px 0; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Big number ── */
+  .big-num { font-size: 2.4rem; font-weight: 700; color: var(--accent); }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step { display: flex; align-items: flex-start; gap: 14px; }
+  .step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-size: .8rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+
+  /* ── Title slide accent bar ── */
+  .title-bar { width: 56px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; margin: 20px 0; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th { background: var(--code-bg); font-weight: 600; padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ── Progress bar ── */
+  .progress { position: fixed; bottom: 0; left: 0; right: 0; height: 3px; background: var(--border); z-index: 10; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .35s ease; }
+
+  /* ── Nav ── */
+  .nav { position: fixed; bottom: 20px; right: 28px; display: flex; gap: 8px; z-index: 10; }
+  .nav button {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 1rem; cursor: pointer;
+    box-shadow: var(--shadow); transition: background .15s, color .15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .nav button:disabled { opacity: .35; cursor: default; }
+
+  /* ── Slide counter ── */
+  .counter { position: fixed; bottom: 26px; left: 28px; font-size: .8rem; color: var(--muted); z-index: 10; }
+
+  /* ── Schema row ── */
+  .schema-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .schema-row:last-child { border: none; }
+  .schema-key { font-family: monospace; font-size: .9rem; font-weight: 600; color: var(--accent); min-width: 130px; }
+  .schema-type { font-size: .75rem; color: var(--muted); min-width: 70px; }
+
+  /* ── Highlight box ── */
+  .highlight { background: #eff3ff; border: 1px solid #c7d4fd; border-radius: 10px; padding: 14px 18px; }
+
+  /* ── Pipeline ── */
+  .pipeline { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .pipe-step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: .85rem; font-weight: 500; box-shadow: var(--shadow); }
+  .pipe-arrow { color: var(--muted); padding: 0 6px; font-size: 1.1rem; }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- ── 1. Title ── -->
+  <div class="slide active">
+    <div class="slide-inner">
+      <p class="eyebrow">LENS Lab — Internal Tooling</p>
+      <h1>Evaluating RAG<br>with RAGAS</h1>
+      <div class="title-bar"></div>
+      <p class="subtitle">Why measurement matters, what the metrics mean,<br>and how to run it directly from your browser.</p>
+    </div>
+  </div>
+
+  <!-- ── 2. The Problem ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">The Problem</p>
+      <h2>You can't tune what you can't measure</h2>
+      <div class="col2">
+        <div class="card accent-top">
+          <h3>RAG has multiple failure modes</h3>
+          <ul>
+            <li>Retrieval fetches the <em>wrong</em> chunks</li>
+            <li>Retrieval misses relevant chunks entirely</li>
+            <li>Answer contradicts the retrieved context</li>
+            <li>Answer ignores the question entirely</li>
+          </ul>
+        </div>
+        <div class="card accent-top">
+          <h3>Traditional metrics fall short</h3>
+          <ul>
+            <li>BLEU / ROUGE measure surface overlap, not meaning</li>
+            <li>Require exact reference strings</li>
+            <li>Give no signal on <em>retrieval</em> quality</li>
+            <li>Don't scale to long-form or technical answers</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight" style="margin-top:20px;">
+        <strong>Consequence:</strong> without structured eval, every prompt or embedding change is a guess. You won't know if things got better or worse until users complain.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. What is RAGAS ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">The Solution</p>
+      <h2>What is RAGAS?</h2>
+      <div class="col2">
+        <div>
+          <div class="card" style="margin-bottom:16px;">
+            <h3>Retrieval-Augmented Generation Assessment</h3>
+            <p style="margin-top:6px;">Open-source Python library by <strong>Exploding Gradients</strong>. Reference-free evaluation framework purpose-built for RAG pipelines.</p>
+          </div>
+          <div class="card">
+            <h3>LLM-as-Judge approach</h3>
+            <p style="margin-top:6px;">Uses an LLM to assess whether claims in the answer are grounded in context, whether retrieved chunks are relevant, and more — <em>without</em> needing a human reviewer for every row.</p>
+          </div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <span class="tag">ragas</span>
+            <span class="tag green">v0.2+</span>
+          </div>
+          <div class="steps">
+            <div class="step"><div class="step-num">1</div><p>Provide: question, retrieved contexts, answer, ground truth</p></div>
+            <div class="step"><div class="step-num">2</div><p>RAGAS sends judge prompts to your LLM</p></div>
+            <div class="step"><div class="step-num">3</div><p>Returns per-row scores (0 → 1) for each metric</p></div>
+            <div class="step"><div class="step-num">4</div><p>Aggregate to compare pipeline versions</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. Dataset Format ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Input</p>
+      <h2>Dataset format (HuggingFace / RAGAS)</h2>
+      <div class="col2">
+        <div>
+          <div class="card" style="margin-bottom:16px;">
+            <div class="schema-row"><span class="schema-key">question</span><span class="schema-type">string</span><span>The search query or question asked</span></div>
+            <div class="schema-row"><span class="schema-key">contexts</span><span class="schema-type">list[str]</span><span>Retrieved chunks passed to the LLM</span></div>
+            <div class="schema-row"><span class="schema-key">answer</span><span class="schema-type">string</span><span>The generated answer <span class="tag amber">optional</span></span></div>
+            <div class="schema-row"><span class="schema-key">ground_truth</span><span class="schema-type">string</span><span>The known correct answer <span class="tag amber">optional</span></span></div>
+          </div>
+          <p class="muted" style="font-size:.88rem;">LENS exports <code>question</code>, <code>contexts</code>, <code>ground_truth</code> — no generated answer, since LENS is search-only.</p>
+        </div>
+        <div>
+          <pre><code><span style="color:#6b7280">// LENS export (.json)</span>
+[
+  {
+    "question": "What is the
+      max torque for PN-4821?",
+    "contexts": [
+      "PN-4821 — Max torque: 45 Nm.
+       Operating temp: -20°C to 85°C.",
+      "Torque specifications are
+       listed on the data sheet."
+    ],
+    "ground_truth": "45 Nm"
+  }
+]</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. Metric overview ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Metrics</p>
+      <h2>Four metrics, two concerns</h2>
+      <div class="col2" style="margin-bottom:20px;">
+        <div class="card sky-top">
+          <h3 style="color:var(--accent2);">Retrieval quality</h3>
+          <p style="margin-top:6px;font-size:.95rem;">Did the pipeline find the right chunks?</p>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+            <span><span class="tag">Context Precision</span> — are the chunks relevant?</span>
+            <span><span class="tag">Context Recall</span> — did we miss anything important?</span>
+          </div>
+        </div>
+        <div class="card accent-top">
+          <h3 style="color:var(--accent);">Generation quality</h3>
+          <p style="margin-top:6px;font-size:.95rem;">Is the generated answer good? <span class="tag amber">needs answer col</span></p>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+            <span><span class="tag">Faithfulness</span> — grounded in context?</span>
+            <span><span class="tag">Answer Relevancy</span> — addresses the question?</span>
+          </div>
+        </div>
+      </div>
+      <table>
+        <tr><th>Metric</th><th>Needs <code>answer</code></th><th>Needs <code>ground_truth</code></th><th>Range</th></tr>
+        <tr><td>Context Precision</td><td>—</td><td>✓</td><td>0 → 1</td></tr>
+        <tr><td>Context Recall</td><td>—</td><td>✓</td><td>0 → 1</td></tr>
+        <tr><td>Faithfulness</td><td>✓</td><td>—</td><td>0 → 1</td></tr>
+        <tr><td>Answer Relevancy</td><td>✓</td><td>—</td><td>0 → 1</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── 6. Context Precision ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Metric 1 of 4</p>
+      <h2>Context Precision</h2>
+      <div class="col2">
+        <div>
+          <p style="margin-bottom:14px;">Measures whether the retrieved chunks are actually <strong>useful for answering the question</strong>, judged against the ground truth. Penalises irrelevant chunks even if the right one is present.</p>
+          <div class="formula">CP = (relevant chunks retrieved) / (total chunks retrieved)</div>
+          <div class="card" style="margin-top:16px;">
+            <h3>Example</h3>
+            <p style="font-size:.9rem;margin-top:4px;"><strong>Q:</strong> "Max torque of PN-4821?"<br>
+            <strong>Retrieved:</strong> 3 chunks — 2 mention torque specs, 1 is about shipping dimensions<br>
+            <strong>CP = 2/3 ≈ 0.67</strong></p>
+          </div>
+        </div>
+        <div>
+          <div class="card green-top" style="margin-bottom:14px;">
+            <h3 style="color:var(--green);">High score (≥ 0.8)</h3>
+            <p style="font-size:.9rem;margin-top:4px;">Most retrieved chunks directly support the answer. Retrieval is precise.</p>
+          </div>
+          <div class="card amber-top" style="margin-bottom:14px;">
+            <h3 style="color:var(--amber);">Mid score (0.4 – 0.8)</h3>
+            <p style="font-size:.9rem;margin-top:4px;">Some noise. May improve by reducing k or tightening the reranker threshold.</p>
+          </div>
+          <div class="card red-top">
+            <h3 style="color:var(--red);">Low score (&lt; 0.4)</h3>
+            <p style="font-size:.9rem;margin-top:4px;">Retrieved chunks are mostly irrelevant. Embedding model or context column choice needs review.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7. Context Recall ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Metric 2 of 4</p>
+      <h2>Context Recall</h2>
+      <div class="col2">
+        <div>
+          <p style="margin-bottom:14px;">Measures whether the retrieved chunks <strong>cover all the information needed</strong> to produce the ground truth answer. Detects gaps — relevant information that exists in the corpus but was not retrieved.</p>
+          <div class="formula">CR = (GT sentences supported by context) / (total GT sentences)</div>
+          <p style="font-size:.88rem;color:var(--muted);margin-top:8px;">The LLM judge decomposes the ground truth into atomic claims and checks each against the retrieved context.</p>
+          <div class="card" style="margin-top:14px;">
+            <h3>Example</h3>
+            <p style="font-size:.9rem;margin-top:4px;"><strong>Ground truth:</strong> "Max torque is 45 Nm. Operating temp is –20°C to 85°C."<br>
+            Retrieved context covers torque but not temp range.<br>
+            <strong>CR = 1/2 = 0.50</strong></p>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:14px;background:#f0fdf4;border-color:#bbf7d0;">
+            <h3>Precision vs Recall trade-off</h3>
+            <p style="font-size:.9rem;margin-top:6px;">Increasing <strong>k</strong> (more chunks) typically improves recall but hurts precision. RAGAS lets you measure both so you can find the sweet spot.</p>
+          </div>
+          <div class="card">
+            <h3>Low recall signals</h3>
+            <ul style="font-size:.9rem;">
+              <li>k value is too small</li>
+              <li>Contextual content columns are missing key fields</li>
+              <li>Multi-part questions need broader retrieval</li>
+              <li>Embedding model underperforms for this domain</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 8. Faithfulness ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Metric 3 of 4</p>
+      <h2>Faithfulness</h2>
+      <div class="col2">
+        <div>
+          <p style="margin-bottom:14px;">Measures whether every claim in the generated answer is <strong>directly supported by the retrieved context</strong>. Detects hallucination — the LLM inventing facts not present in the chunks.</p>
+          <div class="formula">F = (claims supported by context) / (total claims in answer)</div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Example</h3>
+            <p style="font-size:.9rem;margin-top:4px;"><strong>Context:</strong> "PN-4821 max torque: 45 Nm."<br>
+            <strong>Answer:</strong> "Max torque is 45 Nm. It was designed in Germany." (2 claims)<br>
+            Germany is not in the context.<br>
+            <strong>F = 1/2 = 0.50</strong></p>
+          </div>
+        </div>
+        <div>
+          <div class="card amber-top" style="margin-bottom:14px;">
+            <h3 style="color:var(--amber);">Why it matters for LENS</h3>
+            <p style="font-size:.9rem;margin-top:6px;">LENS is search-only, so <em>it has no generated answer</em>. Faithfulness becomes relevant when you build a generation layer on top of LENS results — checking that the LLM stays within the retrieved content.</p>
+          </div>
+          <div class="card">
+            <h3>Requires the <code>answer</code> column</h3>
+            <p style="font-size:.9rem;margin-top:6px;">Supply a CSV with a generated answer column to unlock this metric in <strong>lens-ragas-web</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 9. Answer Relevancy ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Metric 4 of 4</p>
+      <h2>Answer Relevancy</h2>
+      <div class="col2">
+        <div>
+          <p style="margin-bottom:14px;">Measures whether the generated answer <strong>actually addresses the question asked</strong>. An answer can be factually correct yet irrelevant — e.g. answering a different aspect of the question.</p>
+          <div class="formula">AR = avg cosine_sim(generated_questions, original_question)</div>
+          <p style="font-size:.88rem;color:var(--muted);margin-top:8px;">The LLM judge reverse-engineers candidate questions from the answer, then measures embedding similarity to the original.</p>
+          <div class="card" style="margin-top:14px;">
+            <h3>Example</h3>
+            <p style="font-size:.9rem;margin-top:4px;"><strong>Q:</strong> "What is the max torque?"<br>
+            <strong>Answer:</strong> "The part number is PN-4821 and it ships in 3 days."<br>
+            Technically true but completely off-topic.<br>
+            <strong>AR ≈ 0.12</strong></p>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:14px;">
+            <h3>Faithfulness vs Relevancy</h3>
+            <table style="font-size:.85rem;margin-top:8px;">
+              <tr><th></th><th>Faithful</th><th>Relevant</th></tr>
+              <tr><td>Hallucinated but on-topic</td><td style="color:var(--red)">✗</td><td style="color:var(--green)">✓</td></tr>
+              <tr><td>Grounded but off-topic</td><td style="color:var(--green)">✓</td><td style="color:var(--red)">✗</td></tr>
+              <tr><td>Ideal answer</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Requires <code>answer</code> column</h3>
+            <p style="font-size:.9rem;margin-top:6px;">Uses embedding similarity — also requires an embeddings model to be configured alongside the judge LLM.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 10. Score interpretation ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Interpretation</p>
+      <h2>Reading the scores</h2>
+      <div class="col3" style="margin-bottom:22px;">
+        <div class="card green-top" style="text-align:center;">
+          <div class="big-num" style="color:var(--green);">≥ 0.80</div>
+          <h3 style="margin-top:8px;color:var(--green);">Good</h3>
+          <p style="font-size:.88rem;margin-top:4px;">Pipeline is performing well on this metric. Still worth monitoring for regressions.</p>
+        </div>
+        <div class="card amber-top" style="text-align:center;">
+          <div class="big-num" style="color:var(--amber);">0.50 – 0.79</div>
+          <h3 style="margin-top:8px;color:var(--amber);">Needs attention</h3>
+          <p style="font-size:.88rem;margin-top:4px;">Noticeable gaps. Investigate the low-scoring rows — they usually cluster around a specific topic or query type.</p>
+        </div>
+        <div class="card red-top" style="text-align:center;">
+          <div class="big-num" style="color:var(--red);">&lt; 0.50</div>
+          <h3 style="margin-top:8px;color:var(--red);">Investigate</h3>
+          <p style="font-size:.88rem;margin-top:4px;">Systematic issue. Review your context columns, k value, or embedding model choice.</p>
+        </div>
+      </div>
+      <div class="highlight">
+        <strong>Tip:</strong> scores only become meaningful when you compare runs. Establish a baseline, then re-run after each change to your ingestion, k value, or model. The delta matters more than the absolute number.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 11. How to use in the lab ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Our Lab</p>
+      <h2>Using lens-ragas-web</h2>
+      <div class="col2">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div>
+              <strong>Prepare your test set</strong><br>
+              <p style="font-size:.9rem;">A CSV with a <code>question</code> column and a <code>ground_truth</code> column. Even 20–30 representative questions gives useful signal.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div>
+              <strong>Export from LENS</strong><br>
+              <p style="font-size:.9rem;">In LENS → Search → upload your test CSV → click <em>Export RAGAS JSON</em>. This runs retrieval for every question and bundles the results.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div>
+              <strong>Open lens-ragas-web</strong><br>
+              <p style="font-size:.9rem;">Drop the JSON into the upload zone. The tool auto-detects the LENS format and enables context metrics.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div>
+              <strong>Run &amp; export</strong><br>
+              <p style="font-size:.9rem;">Choose your judge (Ollama on-prem or OpenAI), click <em>Run Evaluation</em>, watch scores stream in row by row. Export CSV when done.</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:16px;">
+            <h3>What you get</h3>
+            <ul style="font-size:.9rem;">
+              <li>Per-question scores you can cross-reference with LENS</li>
+              <li>Aggregate mean for each metric</li>
+              <li>Colour-coded table (green / amber / red)</li>
+              <li>CSV export for tracking over time</li>
+              <li>Run history saved in your browser</li>
+            </ul>
+          </div>
+          <div class="card amber-top">
+            <h3 style="color:var(--amber);">LENS format limitation</h3>
+            <p style="font-size:.88rem;margin-top:4px;">LENS is retrieval-only — no generated answer. Context Precision and Context Recall are the two actionable metrics from a standard LENS export. To use Faithfulness and Answer Relevancy, provide a CSV with an <code>answer</code> column from your generation layer.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 12. Workflow summary ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Summary</p>
+      <h2>End-to-end eval workflow</h2>
+      <div style="margin: 24px 0 32px;">
+        <div class="pipeline">
+          <div class="pipe-step">Test CSV<br><span style="font-size:.75rem;color:var(--muted)">question + ground_truth</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">LENS Search<br><span style="font-size:.75rem;color:var(--muted)">retrieves contexts</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">Export RAGAS JSON<br><span style="font-size:.75rem;color:var(--muted)">question + contexts + gt</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step" style="border-color:var(--accent);background:#eff3ff;">lens-ragas-web<br><span style="font-size:.75rem;color:var(--accent)">scores each row</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">CSV Export<br><span style="font-size:.75rem;color:var(--muted)">track over time</span></div>
+        </div>
+      </div>
+      <div class="col3">
+        <div class="card sky-top" style="text-align:center;">
+          <div class="big-num" style="color:var(--accent2);">CP</div>
+          <p style="font-size:.85rem;margin-top:6px;">Are retrieved chunks relevant to the answer?</p>
+        </div>
+        <div class="card sky-top" style="text-align:center;">
+          <div class="big-num" style="color:var(--accent2);">CR</div>
+          <p style="font-size:.85rem;margin-top:6px;">Did retrieval cover everything needed?</p>
+        </div>
+        <div class="card accent-top" style="text-align:center;opacity:.55;">
+          <div class="big-num">F + AR</div>
+          <p style="font-size:.85rem;margin-top:6px;">Generation quality — needs an <code>answer</code> column</p>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.85rem;margin-top:20px;text-align:center;">Run after every significant change — embedding model, k value, context columns, reranker settings.</p>
+    </div>
+  </div>
+
+  <!-- ── 13. Live results screenshot ── -->
+  <div class="slide">
+    <div class="slide-inner">
+      <p class="eyebrow">Live Demo</p>
+      <h2>lens-ragas-web in action</h2>
+
+      <!-- Mocked UI -->
+      <div style="background:#f8f9fb;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);font-size:.8rem;margin-top:16px;">
+
+        <!-- Aggregate -->
+        <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;">
+          <p style="font-weight:600;font-size:.85rem;margin-bottom:10px;">Aggregate scores <span style="color:var(--muted);font-weight:400;">(10 rows)</span></p>
+          <div style="display:flex;gap:12px;">
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px 20px;text-align:center;background:#fff;">
+              <p style="color:var(--muted);font-size:.72rem;margin-bottom:3px;">Context Precision</p>
+              <p style="font-size:1.5rem;font-weight:700;color:var(--green);">0.841</p>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px 20px;text-align:center;background:#fff;">
+              <p style="color:var(--muted);font-size:.72rem;margin-bottom:3px;">Context Recall</p>
+              <p style="font-size:1.5rem;font-weight:700;color:var(--amber);">0.767</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <table style="font-size:.78rem;background:var(--surface);">
+          <thead>
+            <tr style="background:#f8f9fb;">
+              <th style="padding:7px 10px;width:28px;color:var(--muted);font-weight:500;">#</th>
+              <th style="padding:7px 10px;text-align:left;font-weight:600;">Question</th>
+              <th style="padding:7px 18px;text-align:center;font-weight:600;white-space:nowrap;">Context Precision</th>
+              <th style="padding:7px 18px;text-align:center;font-weight:600;white-space:nowrap;">Context Recall</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">1</td><td style="padding:6px 10px;">What laptops are suitable for video editing and creative work?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">2</td><td style="padding:6px 10px;">Which monitors support USB-C connectivity for powering a laptop?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">3</td><td style="padding:6px 10px;">What are the best ergonomic office chairs with lumbar support?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--red);">0.340</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">4</td><td style="padding:6px 10px;">Which gaming laptops have dedicated NVIDIA graphics cards?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">0.818</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.667</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">5</td><td style="padding:6px 10px;">What standing desks have electric motors and memory presets?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.686</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">6</td><td style="padding:6px 10px;">Which network switches support PoE for powering access points?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.750</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">7</td><td style="padding:6px 10px;">What routers support Wi-Fi 6E with a 6GHz band?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.750</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">8</td><td style="padding:6px 10px;">Which monitors are designed for professional photo and video color work?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.652</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">9</td><td style="padding:6px 10px;">What office chairs are suitable for larger or taller users?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">0.917</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--amber);">0.500</td></tr>
+            <tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--muted);">10</td><td style="padding:6px 10px;">Which products are currently discontinued or have limited stock?</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--green);">1.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- Controls -->
+<div class="counter"><span id="cur">1</span> / <span id="total"></span></div>
+<div class="nav">
+  <button id="prev" title="Previous (←)">&#8592;</button>
+  <button id="next" title="Next (→)">&#8594;</button>
+</div>
+<div class="progress"><div class="progress-fill" id="prog"></div></div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'))
+  const total  = slides.length
+  document.getElementById('total').textContent = total
+  let cur = 0, animating = false
+
+  function go(to) {
+    if (animating || to < 0 || to >= total || to === cur) return
+    animating = true
+    const from = cur
+    slides[from].classList.add('exiting')
+    setTimeout(() => {
+      slides[from].classList.remove('active', 'exiting')
+      cur = to
+      slides[cur].classList.add('active')
+      update()
+      setTimeout(() => { animating = false }, 350)
+    }, 200)
+  }
+
+  function update() {
+    document.getElementById('cur').textContent = cur + 1
+    document.getElementById('prev').disabled = cur === 0
+    document.getElementById('next').disabled = cur === total - 1
+    document.getElementById('prog').style.width = ((cur + 1) / total * 100) + '%'
+  }
+
+  document.getElementById('prev').addEventListener('click', () => go(cur - 1))
+  document.getElementById('next').addEventListener('click', () => go(cur + 1))
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); go(cur + 1) }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); go(cur - 1) }
+  })
+
+  // Touch swipe
+  let tx = null
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX })
+  document.addEventListener('touchend',   e => {
+    if (tx === null) return
+    const dx = e.changedTouches[0].clientX - tx
+    if (Math.abs(dx) > 40) go(dx < 0 ? cur + 1 : cur - 1)
+    tx = null
+  })
+
+  update()
+</script>
+</body>
+</html>
