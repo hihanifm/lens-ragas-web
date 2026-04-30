@@ -79,6 +79,7 @@ export default function App() {
           runMeta.status = snap.status || runMeta.status
           runMeta.progress = snap.progress || runMeta.progress
           runMeta.error = snap.error || runMeta.error
+          runMeta.stats = snap.stats || runMeta.stats
           runMeta.metrics = snap.metrics || runMeta.metrics
           runMeta.total = snap.total ?? runMeta.total
 
@@ -171,7 +172,7 @@ export default function App() {
     running.forEach(async r => {
       try {
         const snap = await fetchEvaluationResult(r.meta.job_id)
-        const nextMeta = { ...(r.meta || {}), status: snap.status, progress: snap.progress, error: snap.error }
+        const nextMeta = { ...(r.meta || {}), status: snap.status, progress: snap.progress, error: snap.error, stats: snap.stats }
         const nextResults = {
           ...(r.results || {}),
           rows: snap.rows || r.results?.rows || [],
