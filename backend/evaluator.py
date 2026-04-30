@@ -1,4 +1,5 @@
 import json
+import os
 import pandas as pd
 import time
 import logging
@@ -103,6 +104,15 @@ def build_llm(req):
         from langchain_ollama import ChatOllama, OllamaEmbeddings
         base_url = req.ollama_base_url or "http://localhost:11434"
         model = req.ollama_model or "llama3.2"
+
+        # In Docker, localhost/127.0.0.1 points to the container, not the host.
+        if os.path.exists("/.dockerenv"):
+            if base_url.startswith("http://localhost:") or base_url.startswith("http://127.0.0.1:"):
+                base_url = base_url.replace("http://localhost:", "http://host.docker.internal:")
+                base_url = base_url.replace("http://127.0.0.1:", "http://host.docker.internal:")
+            if base_url == "http://localhost" or base_url == "http://127.0.0.1":
+                base_url = "http://host.docker.internal:11434"
+
         logger.info("llm_provider=ollama base_url=%s model=%s", base_url, model)
         lc_llm = ChatOllama(model=model, base_url=base_url)
         lc_emb = OllamaEmbeddings(model=model, base_url=base_url)
