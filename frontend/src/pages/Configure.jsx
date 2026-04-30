@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { fetchConfig, fetchOllamaModels, fetchOpenAIModels } from '../api/client'
+import { loadHistory } from '../utils/history'
 
 const METRIC_LABELS = {
   faithfulness: 'Faithfulness',
@@ -30,6 +31,8 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
   const [error, setError] = useState(null)
   const [starting, setStarting] = useState(false)
   const startedCountRef = useRef(0)
+  const [activeRunId, setActiveRunId] = useState(null)
+  const [runPoll, setRunPoll] = useState(0)
 
   useEffect(() => {
     fetchConfig().then(cfg => {
@@ -99,6 +102,22 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
     }
   }, [provider, openaiKey])
 
+  useEffect(() => {
+    if (!activeRunId) return
+    const tick = () => {
+      const run = loadHistory().find(r => r.id === activeRunId)
+      setRunPoll(p => p + 1)
+      if (!run) return
+      const s = run?.meta?.status
+      if (s && s !== 'running') {
+        setActiveRunId(null)
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [activeRunId])
+
   function toggleMetric(m) {
     setSelectedMetrics(prev =>
       prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
@@ -135,13 +154,18 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
     }
 
     try {
-      await onStartRun?.(req, meta)
+      const out = await onStartRun?.(req, meta)
+      if (out?.runId) setActiveRunId(out.runId)
     } catch (e) {
       setError(e?.response?.data?.detail || e.message || String(e))
     } finally {
       setStarting(false)
     }
   }
+
+  void runPoll
+  const activeRun = activeRunId ? loadHistory().find(r => r.id === activeRunId) : null
+  const showRunBanner = activeRun && activeRun?.meta?.status === 'running'
 
   return (
     <div className="space-y-6">
@@ -327,6 +351,19 @@ export default function Configure({ parsedFile, onStartRun, onBack }) {
       </div>
 
       {/* Progress / error */}
+      {showRunBanner && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+          <p className="font-medium">Evaluation running in the background</p>
+          <p className="text-blue-800/90 mt-1">
+            Progress: {activeRun?.meta?.progress?.done ?? 0}
+            {activeRun?.meta?.progress?.total != null
+              ? ` / ${activeRun.meta.progress.total}`
+              : ''}
+            {' · '}
+            Open <span className="font-medium">History</span> anytime for details.
+          </p>
+        </div>
+      )}
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
       )}

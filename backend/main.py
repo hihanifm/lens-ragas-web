@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import pandas as pd
+import logging
 import urllib.parse
 import urllib.request
 from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Request
@@ -12,6 +13,12 @@ from models import EvalRequest, ParsedFile
 from evaluator import detect_format, load_rows, run_evaluation
 from jobs import start_job, get_job, cancel_job, stream_job_sse
 import config
+
+logging.basicConfig(
+    level=getattr(logging, (config.LOG_LEVEL or "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("lens-ragas-web")
 
 app = FastAPI(title="lens-ragas-web")
 
@@ -202,7 +209,22 @@ async def evaluate_start(req: EvalRequest):
     filepath = os.path.join(config.UPLOAD_DIR, req.file_id)
     if not os.path.exists(filepath):
         raise HTTPException(404, "File not found. Please re-upload.")
+    msg = (
+        f"evaluate_start file_id={req.file_id} provider={req.llm_provider} "
+        f"model={(req.ollama_model if req.llm_provider == 'ollama' else req.openai_model)} "
+        f"metrics={','.join(req.metrics or [])}"
+    )
+    print(msg, flush=True)
+    logger.info(
+        "evaluate_start file_id=%s provider=%s model=%s metrics=%s",
+        req.file_id,
+        req.llm_provider,
+        req.ollama_model if req.llm_provider == "ollama" else req.openai_model,
+        ",".join(req.metrics or []),
+    )
     job = start_job(filepath=filepath, req=req)
+    print(f"job_started job_id={job.id}", flush=True)
+    logger.info("job_started job_id=%s", job.id)
     return {"job_id": job.id}
 
 
@@ -227,6 +249,8 @@ async def evaluate_cancel(job_id: str):
     ok = cancel_job(job_id)
     if not ok:
         raise HTTPException(404, "Job not found.")
+    print(f"job_cancelled job_id={job_id}", flush=True)
+    logger.info("job_cancelled job_id=%s", job_id)
     return {"ok": True}
 
 

@@ -1,7 +1,7 @@
 import { uuid } from './uuid'
 
 const STORAGE_KEY = 'lens-ragas-web:history:v1'
-const MAX_RUNS = 20
+const MAX_RUNS = 50
 
 export function loadHistory() {
   try {

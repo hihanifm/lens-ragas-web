@@ -53,7 +53,6 @@ export default function App() {
     }
     saveRunToHistory(run)
     setRunningCount(c => c + 1)
-    setStep('history')
 
     const jobId = await startEvaluationJob(req)
     runMeta.job_id = jobId
@@ -105,6 +104,7 @@ export default function App() {
       }
       cancelStream?.()
     })
+    return { runId, jobId }
   }
 
   useEffect(() => {
@@ -146,6 +146,16 @@ export default function App() {
   function openRunFromHistory(entry) {
     setEvalResults(entry.results)
     setStep('results')
+  }
+
+  function handleHistoryDelete(entry) {
+    if (!entry?.id) return
+    if (entry?.meta?.status === 'running') {
+      const cancel = cancelByRunIdRef.current.get(entry.id)
+      cancel?.()
+      cancelByRunIdRef.current.delete(entry.id)
+      setRunningCount(c => Math.max(0, c - 1))
+    }
   }
 
   return (
@@ -192,6 +202,7 @@ export default function App() {
         {step === 'history' && (
           <History
             onOpenRun={openRunFromHistory}
+            onDeleteRun={handleHistoryDelete}
             onBack={() => setStep(evalResults ? 'results' : 'upload')}
           />
         )}

@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import uuid
+import logging
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Optional
 
@@ -66,6 +67,7 @@ class EvalJob:
 
 
 JOBS: dict[str, EvalJob] = {}
+logger = logging.getLogger("lens-ragas-web.jobs")
 
 
 async def _append(job: EvalJob, chunk: str) -> None:
@@ -79,6 +81,19 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
     async def is_disconnected():
         return job.cancelled
 
+    msg = (
+        f"job_run_begin job_id={job.id} provider={getattr(req, 'llm_provider', None)} "
+        f"model={getattr(req, 'ollama_model', None) if getattr(req, 'llm_provider', None) == 'ollama' else getattr(req, 'openai_model', None)} "
+        f"metrics={','.join(getattr(req, 'metrics', []) or [])}"
+    )
+    print(msg, flush=True)
+    logger.info(
+        "job_run_begin job_id=%s provider=%s model=%s metrics=%s",
+        job.id,
+        getattr(req, "llm_provider", None),
+        (getattr(req, "ollama_model", None) if getattr(req, "llm_provider", None) == "ollama" else getattr(req, "openai_model", None)),
+        ",".join(getattr(req, "metrics", []) or []),
+    )
     try:
         async for chunk in run_evaluation(filepath, req, is_disconnected=is_disconnected):
             parsed = _parse_sse_chunk(chunk)
@@ -104,6 +119,8 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
 
             if job.cancelled:
                 job.status = "cancelled"
+                print(f"job_cancelled job_id={job.id} done={len(job.rows)} total={job.total}", flush=True)
+                logger.info("job_cancelled job_id=%s done=%s total=%s", job.id, len(job.rows), job.total)
                 await _append(job, "event: error\ndata: " + json.dumps({"message": "cancelled"}) + "\n\n")
                 return
 
@@ -114,9 +131,13 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
     except Exception as e:
         job.status = "error"
         job.error = str(e)
+        print(f"job_error job_id={job.id} err={str(e)}", flush=True)
+        logger.exception("job_error job_id=%s err=%s", job.id, str(e))
         await _append(job, f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n")
     finally:
         job.last_update_ms = _now_ms()
+        print(f"job_run_end job_id={job.id} status={job.status} done={len(job.rows)} total={job.total}", flush=True)
+        logger.info("job_run_end job_id=%s status=%s done=%s total=%s", job.id, job.status, len(job.rows), job.total)
         async with job.cond:
             job.cond.notify_all()
 

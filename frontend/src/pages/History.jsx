@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { cancelEvaluationJob } from '../api/client'
 import { clearHistory, deleteRunFromHistory, loadHistory } from '../utils/history'
 
 const METRIC_LABELS = {
@@ -8,7 +9,7 @@ const METRIC_LABELS = {
   context_recall: 'Context Recall',
 }
 
-export default function History({ onOpenRun, onBack }) {
+export default function History({ onOpenRun, onBack, onDeleteRun }) {
   const [runs, setRuns] = useState([])
 
   useEffect(() => {
@@ -26,7 +27,20 @@ export default function History({ onOpenRun, onBack }) {
     onOpenRun(run)
   }
 
-  function handleDelete(runId) {
+  async function handleDelete(runId) {
+    const current = loadHistory()
+    const entry = current.find(r => r.id === runId)
+    const status = entry?.meta?.status
+    const jobId = entry?.meta?.job_id
+
+    if (status === 'running' && jobId) {
+      try {
+        await cancelEvaluationJob(jobId)
+      } catch {
+        // still remove from local history; backend may be unreachable
+      }
+    }
+    onDeleteRun?.(entry)
     const next = deleteRunFromHistory(runId)
     setRuns(next)
   }
@@ -43,7 +57,7 @@ export default function History({ onOpenRun, onBack }) {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">History</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Saved locally in this browser (last 20 runs).
+              Saved locally in this browser (last 50 runs).
             </p>
           </div>
           <div className="flex gap-2">
@@ -131,7 +145,7 @@ export default function History({ onOpenRun, onBack }) {
                             Open
                           </button>
                           <button
-                            onClick={() => handleDelete(run.id)}
+                            onClick={() => void handleDelete(run.id)}
                             className="px-3 py-1.5 text-sm font-medium bg-red-50 border border-red-300 rounded-lg text-red-700 shadow-sm hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                           >
                             Delete
