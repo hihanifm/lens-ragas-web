@@ -1,22 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Upload from './pages/Upload'
 import Configure from './pages/Configure'
 import Results from './pages/Results'
 import History from './pages/History'
-import { saveRunToHistory } from './utils/history'
+import { loadHistory, saveRunToHistory } from './utils/history'
 import Footer from './components/Footer'
+import { cancelEvaluationJob, fetchEvaluationResult, startEvaluationJob, streamEvaluationJob } from './api/client'
 
 export default function App() {
   const [step, setStep] = useState('upload') // upload | configure | results | history
   const [parsedFile, setParsedFile] = useState(null)
   const [evalResults, setEvalResults] = useState(null)
-  const [evalRunning, setEvalRunning] = useState(false)
-  const [evalProgress, setEvalProgress] = useState(null) // { done, total } | null
+  const cancelByRunIdRef = useRef(new Map()) // runId -> cancelFn
+  const [runningCount, setRunningCount] = useState(0)
 
-  function handleRunStateChange(running, progress) {
-    setEvalRunning(running)
-    setEvalProgress(running ? progress : null)
-  }
+  const runningSummary = useMemo(() => {
+    if (runningCount <= 0) return null
+    return `${runningCount} running`
+  }, [runningCount])
 
   function handleParsed(data) {
     setParsedFile(data)
@@ -29,23 +30,107 @@ export default function App() {
     setStep('results')
   }
 
-  function handleResults(data, meta = {}) {
+  async function startRun(req, meta = {}) {
+    const runId = crypto.randomUUID()
     const runMeta = {
-      id: crypto.randomUUID(),
+      id: runId,
       createdAt: new Date().toISOString(),
+      status: 'running',
+      progress: { done: 0, total: null },
       ...meta,
-      metrics: data?.metrics,
-      total: data?.total ?? data?.rows?.length,
     }
+
     const run = {
       meta: runMeta,
-      results: { ...data, meta: runMeta },
+      results: {
+        rows: [],
+        aggregate: {},
+        metrics: meta?.metrics || req?.metrics || [],
+        total: null,
+        meta: runMeta,
+      },
     }
     saveRunToHistory(run)
+    setRunningCount(c => c + 1)
+    setStep('history')
 
-    setEvalResults(run.results)
-    setStep('results')
+    const jobId = await startEvaluationJob(req)
+    runMeta.job_id = jobId
+    saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+
+    const cancelStream = streamEvaluationJob(jobId, {
+      onStart: ({ total, metrics }) => {
+        runMeta.progress = { done: 0, total }
+        runMeta.metrics = metrics || runMeta.metrics
+        runMeta.total = total
+        runMeta.status = 'running'
+        saveRunToHistory({
+          meta: runMeta,
+          results: { ...run.results, metrics: runMeta.metrics, total, meta: runMeta },
+        })
+      },
+      onRow: row => {
+        run.results.rows.push(row)
+        runMeta.progress = { ...runMeta.progress, done: run.results.rows.length }
+        saveRunToHistory({
+          meta: runMeta,
+          results: { ...run.results, total: runMeta.total ?? run.results.rows.length, meta: runMeta },
+        })
+      },
+      onComplete: ({ aggregate, total }) => {
+        run.results.aggregate = aggregate || {}
+        run.results.total = total ?? run.results.rows.length
+        runMeta.total = run.results.total
+        runMeta.status = 'complete'
+        runMeta.progress = { done: run.results.total, total: run.results.total }
+        saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+        setRunningCount(c => Math.max(0, c - 1))
+        cancelByRunIdRef.current.delete(runId)
+      },
+      onError: msg => {
+        runMeta.status = msg === 'cancelled' ? 'cancelled' : 'error'
+        runMeta.error = msg
+        saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+        setRunningCount(c => Math.max(0, c - 1))
+        cancelByRunIdRef.current.delete(runId)
+      },
+    })
+
+    cancelByRunIdRef.current.set(runId, async () => {
+      try {
+        await cancelEvaluationJob(jobId)
+      } catch {
+        // ignore
+      }
+      cancelStream?.()
+    })
   }
+
+  useEffect(() => {
+    // On load, reconcile any "running" runs by asking the backend for latest status.
+    const runs = loadHistory()
+    const running = runs.filter(r => r?.meta?.status === 'running' && r?.meta?.job_id)
+    if (!running.length) return
+
+    running.forEach(async r => {
+      try {
+        const snap = await fetchEvaluationResult(r.meta.job_id)
+        const nextMeta = { ...(r.meta || {}), status: snap.status, progress: snap.progress, error: snap.error }
+        const nextResults = {
+          ...(r.results || {}),
+          rows: snap.rows || r.results?.rows || [],
+          aggregate: snap.aggregate || r.results?.aggregate || {},
+          metrics: snap.metrics || r.results?.metrics || [],
+          total: snap.total ?? r.results?.total,
+          meta: nextMeta,
+        }
+        saveRunToHistory({ meta: nextMeta, results: nextResults })
+      } catch {
+        const nextMeta = { ...(r.meta || {}), status: 'interrupted' }
+        saveRunToHistory({ meta: nextMeta, results: { ...(r.results || {}), meta: nextMeta } })
+      }
+    })
+  }, [])
 
   function reset() {
     setParsedFile(null)
@@ -69,33 +154,18 @@ export default function App() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={evalRunning ? undefined : reset}
-              disabled={evalRunning}
-              className="text-lg font-semibold text-gray-900 hover:underline underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
-              title={evalRunning ? 'Evaluation in progress' : 'Home'}
+              onClick={reset}
+              className="text-lg font-semibold text-gray-900 hover:underline underline-offset-4"
+              title="Home"
             >
               LENS RAGAS Eval
             </button>
             <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
           </div>
           <div className="flex items-center gap-3">
-            {evalRunning && evalProgress && (
-              <div className="flex items-center gap-2">
-                <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-1.5 bg-blue-500 rounded-full transition-all duration-300"
-                    style={{ width: evalProgress.total ? `${(evalProgress.done / evalProgress.total) * 100}%` : '0%' }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
-                  {evalProgress.done}{evalProgress.total ? ` / ${evalProgress.total}` : ''}
-                </span>
-              </div>
-            )}
+            {runningSummary && <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">{runningSummary}</span>}
             <button
               onClick={openHistory}
-              disabled={evalRunning}
-              title={evalRunning ? 'Evaluation in progress — cannot open History' : undefined}
               className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               History
@@ -111,9 +181,8 @@ export default function App() {
         {step === 'configure' && (
           <Configure
             parsedFile={parsedFile}
-            onResults={handleResults}
+            onStartRun={startRun}
             onBack={reset}
-            onRunStateChange={handleRunStateChange}
           />
         )}
         {step === 'results' && (

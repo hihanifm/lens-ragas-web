@@ -13,6 +13,8 @@ export default function History({ onOpenRun, onBack }) {
 
   useEffect(() => {
     setRuns(loadHistory())
+    const id = setInterval(() => setRuns(loadHistory()), 1000)
+    return () => clearInterval(id)
   }, [])
 
   const hasRuns = runs.length > 0
@@ -73,6 +75,7 @@ export default function History({ onOpenRun, onBack }) {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">When</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Rows</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Metrics</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">LLM</th>
@@ -84,12 +87,29 @@ export default function History({ onOpenRun, onBack }) {
                   const createdAt = run.createdAt ? new Date(run.createdAt) : null
                   const metrics = run?.results?.metrics || run?.meta?.metrics || []
                   const total = run?.results?.total ?? run?.meta?.total
+                  const status = run?.meta?.status || 'complete'
+                  const progress = run?.meta?.progress
                   const provider = run?.meta?.llm_provider || run?.meta?.provider
                   const model = run?.meta?.ollama_model || run?.meta?.openai_model || run?.meta?.model
                   return (
                     <tr key={run.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                         {createdAt ? createdAt.toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border
+                          ${status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : status === 'complete' ? 'bg-green-50 text-green-700 border-green-200'
+                              : status === 'error' ? 'bg-red-50 text-red-700 border-red-200'
+                                : status === 'cancelled' ? 'bg-gray-50 text-gray-700 border-gray-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          {status}
+                          {status === 'running' && progress && (
+                            <span className="ml-2 tabular-nums text-[11px] text-blue-600">
+                              {progress.done}{progress.total ? `/${progress.total}` : ''}
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-gray-700">
                         {total != null ? total : (run?.results?.rows?.length ?? '—')}

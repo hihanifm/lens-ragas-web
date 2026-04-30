@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react'
+import { loadHistory } from '../utils/history'
+
 const METRIC_LABELS = {
   faithfulness: 'Faithfulness',
   answer_relevancy: 'Answer Relevancy',
@@ -6,7 +9,23 @@ const METRIC_LABELS = {
 }
 
 export default function Results({ results, onReset }) {
-  const { rows, aggregate, metrics, meta } = results
+  const [current, setCurrent] = useState(results)
+
+  useEffect(() => {
+    setCurrent(results)
+  }, [results])
+
+  useEffect(() => {
+    const runId = current?.meta?.id
+    if (!runId) return
+    const id = setInterval(() => {
+      const found = loadHistory().find(r => r.id === runId)
+      if (found?.results) setCurrent(found.results)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [current?.meta?.id])
+
+  const { rows, aggregate, metrics, meta } = current
 
   function exportCsv() {
     const header = ['question', ...metrics, 'lens_metadata'].join(',')

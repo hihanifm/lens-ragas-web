@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from models import EvalRequest, ParsedFile
 from evaluator import detect_format, load_rows, run_evaluation
+from jobs import start_job, get_job, cancel_job, stream_job_sse
 import config
 
 app = FastAPI(title="lens-ragas-web")
@@ -121,6 +122,38 @@ async def evaluate_endpoint(req: EvalRequest, request: Request):
             yield f"event: error\ndata: {_json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+@api.post("/evaluate/start")
+async def evaluate_start(req: EvalRequest):
+    filepath = os.path.join(config.UPLOAD_DIR, req.file_id)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "File not found. Please re-upload.")
+    job = start_job(filepath=filepath, req=req)
+    return {"job_id": job.id}
+
+
+@api.get("/evaluate/stream/{job_id}")
+async def evaluate_stream(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found.")
+    return StreamingResponse(stream_job_sse(job), media_type="text/event-stream")
+
+
+@api.get("/evaluate/result/{job_id}")
+async def evaluate_result(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found.")
+    return job.snapshot()
+
+
+@api.post("/evaluate/cancel/{job_id}")
+async def evaluate_cancel(job_id: str):
+    ok = cancel_job(job_id)
+    if not ok:
+        raise HTTPException(404, "Job not found.")
+    return {"ok": True}
 
 
 app.include_router(api)

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { streamEvaluation, fetchConfig } from '../api/client'
+import { fetchConfig } from '../api/client'
 
 const METRIC_LABELS = {
   faithfulness: 'Faithfulness',
@@ -15,7 +15,7 @@ const METRIC_DESC = {
   context_recall: 'Did retrieval cover what was needed? (needs ground_truth)',
 }
 
-export default function Configure({ parsedFile, onResults, onBack, onRunStateChange }) {
+export default function Configure({ parsedFile, onStartRun, onBack }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
 
@@ -23,10 +23,9 @@ export default function Configure({ parsedFile, onResults, onBack, onRunStateCha
   const [openaiKey, setOpenaiKey] = useState('')
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini')
   const [selectedMetrics, setSelectedMetrics] = useState(parsedFile.available_metrics)
-  const [running, setRunning] = useState(false)
-  const [progress, setProgress] = useState(null) // { done, total }
   const [error, setError] = useState(null)
-  const cancelRef = useRef(null)
+  const [starting, setStarting] = useState(false)
+  const startedCountRef = useRef(0)
 
   useEffect(() => {
     fetchConfig().then(cfg => {
@@ -38,29 +37,17 @@ export default function Configure({ parsedFile, onResults, onBack, onRunStateCha
     }).catch(() => {})
   }, [])
 
-  // Cancel stream and notify parent if this component is unmounted mid-run
-  useEffect(() => {
-    return () => {
-      cancelRef.current?.()
-      onRunStateChange?.(false, null)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   function toggleMetric(m) {
     setSelectedMetrics(prev =>
       prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
     )
   }
 
-  function handleRun() {
+  async function handleRun() {
     if (!selectedMetrics.length) return
     setError(null)
-    setRunning(true)
-    const initialProgress = { done: 0, total: null }
-    setProgress(initialProgress)
-    onRunStateChange?.(true, initialProgress)
-
-    const rows = []
+    setStarting(true)
+    startedCountRef.current += 1
 
     const req = {
       file_id: parsedFile.file_id,
@@ -71,53 +58,27 @@ export default function Configure({ parsedFile, onResults, onBack, onRunStateCha
       openai_api_key: openaiKey || undefined,
       openai_model: openaiModel,
     }
+    const meta = {
+      llm_provider: provider,
+      provider,
+      ollama_base_url: provider === 'ollama' ? ollamaUrl : undefined,
+      ollama_model: provider === 'ollama' ? ollamaModel : undefined,
+      openai_model: provider === 'openai' ? openaiModel : undefined,
+      file_id: parsedFile?.file_id,
+      row_count: parsedFile?.row_count,
+      format: parsedFile?.format,
+      input_filename: parsedFile?.input_filename,
+      lens_metadata: parsedFile?.lens_metadata,
+      metrics: selectedMetrics,
+    }
 
-    cancelRef.current = streamEvaluation(req, {
-      onStart: ({ total }) => {
-        const p = { done: 0, total }
-        setProgress(p)
-        onRunStateChange?.(true, p)
-      },
-      onRow: (row) => {
-        rows.push(row)
-        setProgress(p => {
-          const next = { ...p, done: rows.length }
-          onRunStateChange?.(true, next)
-          return next
-        })
-      },
-      onComplete: ({ aggregate, total }) => {
-        setRunning(false)
-        onRunStateChange?.(false, null)
-        onResults(
-          { rows, aggregate, metrics: selectedMetrics, total },
-          {
-            provider,
-            llm_provider: provider,
-            ollama_base_url: provider === 'ollama' ? ollamaUrl : undefined,
-            ollama_model: provider === 'ollama' ? ollamaModel : undefined,
-            openai_model: provider === 'openai' ? openaiModel : undefined,
-            file_id: parsedFile?.file_id,
-            row_count: parsedFile?.row_count,
-            format: parsedFile?.format,
-            input_filename: parsedFile?.input_filename,
-            lens_metadata: parsedFile?.lens_metadata,
-          }
-        )
-      },
-      onError: (msg) => {
-        setRunning(false)
-        onRunStateChange?.(false, null)
-        setError(msg)
-      },
-    })
-  }
-
-  function handleCancel() {
-    cancelRef.current?.()
-    setRunning(false)
-    setProgress(null)
-    onRunStateChange?.(false, null)
+    try {
+      await onStartRun?.(req, meta)
+    } catch (e) {
+      setError(e?.response?.data?.detail || e.message || String(e))
+    } finally {
+      setStarting(false)
+    }
   }
 
   return (
@@ -236,38 +197,19 @@ export default function Configure({ parsedFile, onResults, onBack, onRunStateCha
       </div>
 
       {/* Progress / error */}
-      {running && progress && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-gray-700 font-medium">
-              Evaluating... {progress.done}{progress.total ? ` / ${progress.total}` : ''}
-            </p>
-            <button onClick={handleCancel} className="text-sm text-red-500 hover:underline">Cancel</button>
-          </div>
-          {progress.total && (
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-2 bg-blue-500 rounded-full transition-all"
-                style={{ width: `${(progress.done / progress.total) * 100}%` }}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
       )}
 
       <div className="flex gap-3">
-        <button onClick={onBack} disabled={running}
+        <button onClick={onBack} disabled={starting}
           className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           Back
         </button>
-        <button onClick={handleRun} disabled={running || !selectedMetrics.length}
+        <button onClick={handleRun} disabled={starting || !selectedMetrics.length}
           data-testid="run-evaluation"
           className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
-          {running ? 'Running...' : 'Run Evaluation'}
+          {starting ? 'Starting...' : 'Run Evaluation'}
         </button>
       </div>
     </div>
