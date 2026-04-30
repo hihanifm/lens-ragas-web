@@ -13,7 +13,13 @@ import config
 import db
 
 
-def _maybe_record_llm_usage(req, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+def _maybe_record_llm_usage(
+    req,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    *,
+    calls: int = 1,
+) -> None:
     job_id = getattr(req, "job_id", None)
     if not job_id:
         return
@@ -27,13 +33,51 @@ def _maybe_record_llm_usage(req, prompt_tokens: int | None, completion_tokens: i
         if inp > 0 or out > 0:
             cost_add = (pt / 1000.0) * inp + (ct / 1000.0) * out
 
-    db.incr_llm_usage(
-        config.DB_PATH,
-        job_id=job_id,
-        prompt_tokens=pt,
-        completion_tokens=ct,
-        cost_usd_add=cost_add,
-    )
+    # Some LangChain code paths batch multiple prompts into one `.generate()` call.
+    # We track `llm_calls` per prompt best-effort, but only have token usage for the whole call.
+    n = max(1, int(calls or 1))
+    for i in range(n):
+        db.incr_llm_usage(
+            config.DB_PATH,
+            job_id=job_id,
+            prompt_tokens=(pt if i == 0 else 0),
+            completion_tokens=(ct if i == 0 else 0),
+            cost_usd_add=(cost_add if i == 0 else None),
+        )
+
+
+def _extract_usage_from_result(obj) -> tuple[int | None, int | None]:
+    """
+    Best-effort token extraction across LangChain return types.
+    - `AIMessage`: `usage_metadata` or `response_metadata.token_usage`
+    - `LLMResult`: `llm_output.token_usage`
+    """
+    if obj is None:
+        return None, None
+
+    usage = getattr(obj, "usage_metadata", None)
+    if isinstance(usage, dict) and usage:
+        pt = usage.get("input_tokens") or usage.get("prompt_tokens")
+        ct = usage.get("output_tokens") or usage.get("completion_tokens")
+        return (int(pt) if pt is not None else None, int(ct) if ct is not None else None)
+
+    resp_meta = getattr(obj, "response_metadata", None)
+    if isinstance(resp_meta, dict):
+        token_usage = resp_meta.get("token_usage") or resp_meta.get("usage") or resp_meta.get("usage_metadata")
+        if isinstance(token_usage, dict) and token_usage:
+            pt = token_usage.get("prompt_tokens") or token_usage.get("input_tokens")
+            ct = token_usage.get("completion_tokens") or token_usage.get("output_tokens")
+            return (int(pt) if pt is not None else None, int(ct) if ct is not None else None)
+
+    llm_output = getattr(obj, "llm_output", None)
+    if isinstance(llm_output, dict):
+        token_usage = llm_output.get("token_usage") or llm_output.get("usage")
+        if isinstance(token_usage, dict) and token_usage:
+            pt = token_usage.get("prompt_tokens") or token_usage.get("input_tokens")
+            ct = token_usage.get("completion_tokens") or token_usage.get("output_tokens")
+            return (int(pt) if pt is not None else None, int(ct) if ct is not None else None)
+
+    return None, None
 
 def _row_extra_fields(src: dict) -> dict:
     """Fields from the input row for display in the UI (not from ragas scores)."""
@@ -124,23 +168,28 @@ def build_llm(req):
 
             def invoke(self, *args, **kwargs):
                 out = self._inner.invoke(*args, **kwargs)
-                # ChatOpenAI commonly returns an AIMessage with usage_metadata.
-                usage = getattr(out, "usage_metadata", None) or {}
-                _maybe_record_llm_usage(
-                    req,
-                    usage.get("input_tokens") or usage.get("prompt_tokens"),
-                    usage.get("output_tokens") or usage.get("completion_tokens"),
-                )
+                pt, ct = _extract_usage_from_result(out)
+                _maybe_record_llm_usage(req, pt, ct, calls=1)
                 return out
 
             async def ainvoke(self, *args, **kwargs):
                 out = await self._inner.ainvoke(*args, **kwargs)
-                usage = getattr(out, "usage_metadata", None) or {}
-                _maybe_record_llm_usage(
-                    req,
-                    usage.get("input_tokens") or usage.get("prompt_tokens"),
-                    usage.get("output_tokens") or usage.get("completion_tokens"),
-                )
+                pt, ct = _extract_usage_from_result(out)
+                _maybe_record_llm_usage(req, pt, ct, calls=1)
+                return out
+
+            def generate(self, messages, *args, **kwargs):
+                out = self._inner.generate(messages, *args, **kwargs)
+                pt, ct = _extract_usage_from_result(out)
+                calls = len(messages) if isinstance(messages, list) else 1
+                _maybe_record_llm_usage(req, pt, ct, calls=calls)
+                return out
+
+            async def agenerate(self, messages, *args, **kwargs):
+                out = await self._inner.agenerate(messages, *args, **kwargs)
+                pt, ct = _extract_usage_from_result(out)
+                calls = len(messages) if isinstance(messages, list) else 1
+                _maybe_record_llm_usage(req, pt, ct, calls=calls)
                 return out
 
             def __getattr__(self, name):
@@ -165,12 +214,24 @@ def build_llm(req):
 
             def invoke(self, *args, **kwargs):
                 out = self._inner.invoke(*args, **kwargs)
-                _maybe_record_llm_usage(req, None, None)
+                _maybe_record_llm_usage(req, None, None, calls=1)
                 return out
 
             async def ainvoke(self, *args, **kwargs):
                 out = await self._inner.ainvoke(*args, **kwargs)
-                _maybe_record_llm_usage(req, None, None)
+                _maybe_record_llm_usage(req, None, None, calls=1)
+                return out
+
+            def generate(self, messages, *args, **kwargs):
+                out = self._inner.generate(messages, *args, **kwargs)
+                calls = len(messages) if isinstance(messages, list) else 1
+                _maybe_record_llm_usage(req, None, None, calls=calls)
+                return out
+
+            async def agenerate(self, messages, *args, **kwargs):
+                out = await self._inner.agenerate(messages, *args, **kwargs)
+                calls = len(messages) if isinstance(messages, list) else 1
+                _maybe_record_llm_usage(req, None, None, calls=calls)
                 return out
 
             def __getattr__(self, name):
