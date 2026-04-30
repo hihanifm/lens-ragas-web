@@ -4,6 +4,7 @@ import Configure from './pages/Configure'
 import Results from './pages/Results'
 import History from './pages/History'
 import { loadHistory, saveRunToHistory } from './utils/history'
+import { uuid } from './utils/uuid'
 import Footer from './components/Footer'
 import { cancelEvaluationJob, fetchEvaluationResult, startEvaluationJob, streamEvaluationJob } from './api/client'
 
@@ -31,7 +32,7 @@ export default function App() {
   }
 
   async function startRun(req, meta = {}) {
-    const runId = crypto.randomUUID()
+    const runId = uuid()
     const runMeta = {
       id: runId,
       createdAt: new Date().toISOString(),

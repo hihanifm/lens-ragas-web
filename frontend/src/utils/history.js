@@ -1,3 +1,5 @@
+import { uuid } from './uuid'
+
 const STORAGE_KEY = 'lens-ragas-web:history:v1'
 const MAX_RUNS = 20
 
@@ -14,7 +16,7 @@ export function loadHistory() {
 
 export function saveRunToHistory(run) {
   const entry = {
-    id: run?.meta?.id || crypto.randomUUID(),
+    id: run?.meta?.id || uuid(),
     createdAt: run?.meta?.createdAt || new Date().toISOString(),
     meta: run?.meta || {},
     results: run?.results || run,
