@@ -42,6 +42,19 @@ export default function Results({ results, onReset }) {
     status === 'running' ||
     (!isFinal && expectedTotal != null && rows.length < expectedTotal)
 
+  function getGroundTruth(row) {
+    return row?.ground_truth ?? row?.reference ?? null
+  }
+
+  function getAnswer(row) {
+    return row?.answer ?? row?.response ?? null
+  }
+
+  function getContexts(row) {
+    const v = row?.contexts ?? row?.retrieved_contexts ?? row?.retrievedContexts ?? null
+    return Array.isArray(v) ? v : v == null ? null : [String(v)]
+  }
+
   function escapeCsvField(value) {
     return `"${String(value ?? '').replace(/"/g, '""')}"`
   }
@@ -49,13 +62,13 @@ export default function Results({ results, onReset }) {
   function exportCsv() {
     const header = ['question', ...metrics, 'ground_truth', 'contexts', 'answer', 'lens_metadata'].join(',')
     const lines = rows.map(r => {
-      const ctxJson = JSON.stringify(Array.isArray(r.contexts) ? r.contexts : [])
+      const ctxJson = JSON.stringify(getContexts(r) || [])
       return [
         escapeCsvField(r.question),
         ...metrics.map(m => r.scores[m] ?? ''),
-        escapeCsvField(r.ground_truth),
+        escapeCsvField(getGroundTruth(r)),
         escapeCsvField(ctxJson),
-        escapeCsvField(r.answer),
+        escapeCsvField(getAnswer(r)),
         '',
       ].join(',')
     })
@@ -204,17 +217,17 @@ export default function Results({ results, onReset }) {
                   </td>
                   <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
                     <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {cellOrDash(row.ground_truth)}
+                      {cellOrDash(getGroundTruth(row))}
                     </div>
                   </td>
                   <td className="px-3 py-3 align-top min-w-[220px] max-w-lg">
                     <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {formatContextsCell(row.contexts)}
+                      {formatContextsCell(getContexts(row))}
                     </div>
                   </td>
                   <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
                     <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {cellOrDash(row.answer)}
+                      {cellOrDash(getAnswer(row))}
                     </div>
                   </td>
                   {metrics.map(m => (

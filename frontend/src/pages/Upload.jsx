@@ -4,20 +4,137 @@ import { parseExportedScoresCsv } from '../utils/scoresCsv'
 const SAMPLE_FILENAME = 'sample-dataset.json'
 const SAMPLE_SCORES_FILENAME = 'sample-scores.csv'
 
+const PREVIEW_ROWS = 5
+const TRUNCATE_CHARS = 140
+
+function truncateCell(v, max = TRUNCATE_CHARS) {
+  const s = typeof v === 'string' ? v : v == null ? '' : String(v)
+  if (s.length <= max) return s
+  return s.slice(0, max) + '…'
+}
+
+function tryParseJson(v) {
+  if (v == null) return null
+  const s = String(v).trim()
+  if (!s) return null
+  try {
+    return JSON.parse(s)
+  } catch {
+    return null
+  }
+}
+
+// Minimal CSV parser: handles quotes + commas; not meant for edge-case perfection.
+function parseCsv(text) {
+  const rows = []
+  let row = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          cur += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        cur += ch
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true
+      } else if (ch === ',') {
+        row.push(cur)
+        cur = ''
+      } else if (ch === '\n') {
+        row.push(cur)
+        rows.push(row)
+        row = []
+        cur = ''
+      } else if (ch === '\r') {
+        // ignore
+      } else {
+        cur += ch
+      }
+    }
+  }
+  // trailing cell
+  row.push(cur)
+  rows.push(row)
+  return rows.filter(r => r.some(c => String(c ?? '').trim() !== ''))
+}
+
+async function buildPreview(file) {
+  if (!file) return null
+  const name = String(file.name || '').toLowerCase()
+  const text = await file.text()
+
+  if (name.endsWith('.json')) {
+    const parsed = tryParseJson(text)
+    const arr = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.results) ? parsed.results : []
+    const previewRows = arr
+      .filter(x => x && typeof x === 'object')
+      .slice(0, PREVIEW_ROWS)
+      .map(r => ({ ...r }))
+    const columns = Array.from(
+      new Set(
+        previewRows.flatMap(r => Object.keys(r || {}))
+      )
+    )
+    return { columns, rows: previewRows }
+  }
+
+  if (name.endsWith('.csv')) {
+    const matrix = parseCsv(text.replace(/\r\n/g, '\n'))
+    if (!matrix.length) return { columns: [], rows: [] }
+    const header = (matrix[0] || []).map(h => String(h || '').trim())
+    const dataRows = matrix.slice(1, 1 + PREVIEW_ROWS).map(cols => {
+      const obj = {}
+      header.forEach((h, idx) => {
+        obj[h || `col_${idx + 1}`] = cols[idx] ?? ''
+      })
+      // Try to normalize contexts into array for nicer rendering.
+      if (Object.prototype.hasOwnProperty.call(obj, 'contexts')) {
+        const p = tryParseJson(obj.contexts)
+        if (Array.isArray(p)) obj.contexts = p
+      }
+      return obj
+    })
+    const columns = header.filter(Boolean)
+    return { columns, rows: dataRows }
+  }
+
+  return null
+}
+
 export default function Upload({ onParsed, onLoadScores }) {
   const inputRef = useRef()
   const scoresRef = useRef()
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [preview, setPreview] = useState(null) // { columns: string[], rows: object[] }
+  const [parsedReady, setParsedReady] = useState(null) // parsedFile payload to pass to Configure
 
   async function handleFile(file) {
     if (!file) return
     setError(null)
     setLoading(true)
+    setPreview(null)
+    setParsedReady(null)
     try {
+      // Client-side preview (top 5 rows) so the user can sanity-check the file.
+      try {
+        const p = await buildPreview(file)
+        setPreview(p)
+      } catch {
+        setPreview(null)
+      }
       const data = await parseFile(file)
-      onParsed({ ...data, input_filename: file.name })
+      setParsedReady({ ...data, input_filename: file.name })
     } catch (e) {
       setError(e.response?.data?.detail || e.message)
     } finally {
@@ -121,6 +238,24 @@ export default function Upload({ onParsed, onLoadScores }) {
         )}
       </div>
 
+      {parsedReady && !loading && !error && (
+        <div className="mt-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+          <div className="text-sm text-blue-900">
+            <span className="font-medium">File parsed.</span>{' '}
+            <span className="text-blue-900/90">
+              {parsedReady.row_count} rows · {parsedReady.format}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onParsed?.(parsedReady)}
+            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
       <input
         ref={inputRef}
         type="file"
@@ -168,6 +303,58 @@ export default function Upload({ onParsed, onLoadScores }) {
           {error}
         </div>
       )}
+
+      {preview?.rows?.length ? (
+        <div className="mt-6">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h3 className="text-sm font-semibold text-gray-900">Preview (first {Math.min(PREVIEW_ROWS, preview.rows.length)} rows)</h3>
+            <p className="text-xs text-gray-500">Values are truncated for readability.</p>
+          </div>
+          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-max min-w-full text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {(preview.columns?.length ? preview.columns : Object.keys(preview.rows[0] || {})).map(col => (
+                      <th
+                        key={col}
+                        className="text-left px-3 py-2 font-medium text-gray-600 whitespace-nowrap"
+                      >
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((r, idx) => {
+                    const cols = preview.columns?.length ? preview.columns : Object.keys(r || {})
+                    return (
+                      <tr key={idx} className="border-b border-gray-100 last:border-b-0">
+                        {cols.map(col => {
+                          const raw = r?.[col]
+                          const normalized =
+                            col === 'contexts' && Array.isArray(raw)
+                              ? raw.map(x => String(x ?? '')).join(' | ')
+                              : typeof raw === 'object' && raw != null
+                                ? JSON.stringify(raw)
+                                : raw
+                          return (
+                            <td key={col} className="px-3 py-2 align-top text-gray-700">
+                              <div className="max-w-[340px] whitespace-pre-wrap break-words">
+                                {truncateCell(normalized)}
+                              </div>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
