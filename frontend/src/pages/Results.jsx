@@ -25,7 +25,22 @@ export default function Results({ results, onReset }) {
     return () => clearInterval(id)
   }, [current?.meta?.id])
 
-  const { rows, aggregate, metrics, meta } = current
+  const { rows, aggregate, metrics, meta, total: resultsTotal } = current
+
+  const status = meta?.status
+  const progress = meta?.progress
+  const expectedTotal =
+    meta?.total != null
+      ? meta.total
+      : resultsTotal != null
+        ? resultsTotal
+        : progress?.total != null
+          ? progress.total
+          : null
+  const isFinal = status === 'complete' || status === 'error' || status === 'cancelled' || status === 'interrupted'
+  const isRunning =
+    status === 'running' ||
+    (!isFinal && expectedTotal != null && rows.length < expectedTotal)
 
   function exportCsv() {
     const header = ['question', ...metrics, 'lens_metadata'].join(',')
@@ -62,9 +77,34 @@ export default function Results({ results, onReset }) {
 
   return (
     <div className="space-y-6">
+      {isRunning && (
+        <div
+          className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900"
+          data-testid="results-running-banner"
+        >
+          <span
+            className="mt-0.5 inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse shrink-0"
+            aria-hidden
+          />
+          <div>
+            <p className="font-medium">Evaluation in progress</p>
+            <p className="text-blue-800/90 mt-0.5">
+              Scoring rows as they complete: {rows.length}
+              {expectedTotal != null ? ` / ${expectedTotal}` : ''}
+            </p>
+            <p className="text-xs text-blue-700/80 mt-1">
+              Final aggregates update when all rows are done. You can leave this page; progress is saved in History.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Aggregate summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-5" data-testid="results-aggregate">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Aggregate scores ({rows.length} rows)</h2>
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">
+          Aggregate scores
+          {isRunning ? ` (partial — ${rows.length} of ${expectedTotal ?? '?'} rows)` : ` (${rows.length} rows)`}
+        </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {metrics.map(m => (
             <div key={m} className="bg-gray-50 rounded-lg px-4 py-3 text-center">
@@ -160,7 +200,9 @@ export default function Results({ results, onReset }) {
           Start Over
         </button>
         <button onClick={exportCsv}
-          className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
+          disabled={isRunning}
+          title={isRunning ? 'Wait until the run finishes for a complete export' : undefined}
+          className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
           Export CSV
         </button>
       </div>
