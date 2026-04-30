@@ -43,6 +43,18 @@ export async function cancelEvaluationJob(jobId) {
   return data
 }
 
+export async function fetchServerRuns({ project, limit = 50, offset = 0 } = {}) {
+  const params = { limit, offset }
+  if (project) params.project = project
+  const { data } = await api.get('/runs', { params })
+  return data?.runs || []
+}
+
+export async function deleteServerRun(jobId) {
+  const { data } = await api.delete(`/runs/${jobId}`)
+  return data
+}
+
 export function streamEvaluationJob(jobId, { onStart, onRow, onComplete, onError }) {
   const ctrl = new AbortController()
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { cancelEvaluationJob } from '../api/client'
+import { cancelEvaluationJob, deleteServerRun, fetchEvaluationResult, fetchServerRuns } from '../api/client'
 import { clearHistory, deleteRunFromHistory, loadHistory } from '../utils/history'
 
 const METRIC_LABELS = {
@@ -10,7 +10,10 @@ const METRIC_LABELS = {
 }
 
 export default function History({ onOpenRun, onBack, onDeleteRun }) {
+  const [mode, setMode] = useState('local') // local | server
   const [runs, setRuns] = useState([])
+  const [serverRuns, setServerRuns] = useState([])
+  const [serverStatus, setServerStatus] = useState({ loading: false, error: null })
 
   useEffect(() => {
     setRuns(loadHistory())
@@ -18,13 +21,52 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
     return () => clearInterval(id)
   }, [])
 
-  const hasRuns = runs.length > 0
-  const sortedRuns = useMemo(() => {
+  useEffect(() => {
+    if (mode !== 'server') return
+    let cancelled = false
+    setServerStatus({ loading: true, error: null })
+    const tick = async () => {
+      try {
+        const list = await fetchServerRuns({ limit: 200, offset: 0 })
+        if (cancelled) return
+        setServerRuns(Array.isArray(list) ? list : [])
+        setServerStatus({ loading: false, error: null })
+      } catch (e) {
+        if (cancelled) return
+        setServerRuns([])
+        setServerStatus({ loading: false, error: e?.response?.data?.detail || e?.message || 'Failed to load runs' })
+      }
+    }
+    void tick()
+    const id = setInterval(() => void tick(), 2000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [mode])
+
+  const localHasRuns = runs.length > 0
+  const sortedLocalRuns = useMemo(() => {
     return [...runs].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   }, [runs])
 
+  const serverHasRuns = serverRuns.length > 0
+  const sortedServerRuns = useMemo(() => {
+    return [...serverRuns].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  }, [serverRuns])
+
   function handleOpen(run) {
     onOpenRun(run)
+  }
+
+  async function handleOpenServer(run) {
+    try {
+      const snap = await fetchEvaluationResult(run.job_id)
+      // Open Results using the same shape History uses (entry.results)
+      onOpenRun({ id: run.job_id, results: snap })
+    } catch {
+      // ignore; user can retry
+    }
   }
 
   async function handleDelete(runId) {
@@ -50,15 +92,54 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
     setRuns([])
   }
 
+  async function handleDeleteServer(run) {
+    const jobId = run?.job_id
+    if (!jobId) return
+    if (
+      !window.confirm(
+        'Delete this run from the server history? This affects all PCs using this server.',
+      )
+    ) {
+      return
+    }
+    if (run.status === 'running') {
+      try {
+        await cancelEvaluationJob(jobId)
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      await deleteServerRun(jobId)
+      setServerRuns(prev => prev.filter(r => r.job_id !== jobId))
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">History</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Saved locally in this browser (last 50 runs).
-            </p>
+            <p className="text-sm text-gray-500 mt-1">Local runs are this PC only. Server runs are shared.</p>
+            <div className="mt-3 inline-flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setMode('local')}
+                className={`px-3 py-1.5 text-sm ${mode === 'local' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Local
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('server')}
+                className={`px-3 py-1.5 text-sm ${mode === 'server' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Server
+              </button>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -67,21 +148,27 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
             >
               Back
             </button>
-            <button
-              onClick={handleClearAll}
-              disabled={!hasRuns}
-              className="px-4 py-2 text-sm font-medium bg-amber-50 border border-amber-300 rounded-lg text-amber-800 shadow-sm hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              Clear
-            </button>
+            {mode === 'local' && (
+              <button
+                onClick={handleClearAll}
+                disabled={!localHasRuns}
+                className="px-4 py-2 text-sm font-medium bg-amber-50 border border-amber-300 rounded-lg text-amber-800 shadow-sm hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {!hasRuns ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-sm text-gray-600">
-          No saved runs yet. Run an evaluation to see it here.
-        </div>
+      {mode === 'local' && !localHasRuns ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-sm text-gray-600">No local runs yet.</div>
+      ) : mode === 'server' && serverStatus.loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-sm text-gray-600">Loading server runs…</div>
+      ) : mode === 'server' && serverStatus.error ? (
+        <div className="bg-white rounded-xl border border-red-200 p-8 text-sm text-red-700">{serverStatus.error}</div>
+      ) : mode === 'server' && !serverHasRuns ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-sm text-gray-600">No server runs yet.</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -97,16 +184,19 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedRuns.map(run => {
-                  const createdAt = run.createdAt ? new Date(run.createdAt) : null
-                  const metrics = run?.results?.metrics || run?.meta?.metrics || []
-                  const total = run?.results?.total ?? run?.meta?.total
-                  const status = run?.meta?.status || 'complete'
-                  const progress = run?.meta?.progress
-                  const provider = run?.meta?.llm_provider || run?.meta?.provider
-                  const model = run?.meta?.ollama_model || run?.meta?.openai_model || run?.meta?.model
+                {(mode === 'local' ? sortedLocalRuns : sortedServerRuns).map(run => {
+                  const isServer = mode === 'server'
+                  const createdAt = isServer
+                    ? (run.created_at ? new Date(run.created_at) : null)
+                    : (run.createdAt ? new Date(run.createdAt) : null)
+                  const metrics = isServer ? (run.metrics || []) : (run?.results?.metrics || run?.meta?.metrics || [])
+                  const total = isServer ? run?.total : (run?.results?.total ?? run?.meta?.total)
+                  const status = isServer ? (run?.status || 'complete') : (run?.meta?.status || 'complete')
+                  const progress = isServer ? run?.progress : run?.meta?.progress
+                  const provider = isServer ? run?.provider : (run?.meta?.llm_provider || run?.meta?.provider)
+                  const model = isServer ? run?.model : (run?.meta?.ollama_model || run?.meta?.openai_model || run?.meta?.model)
                   return (
-                    <tr key={run.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={isServer ? run.job_id : run.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                         {createdAt ? createdAt.toLocaleString() : '—'}
                       </td>
@@ -139,20 +229,15 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
                           <button
-                            onClick={() => handleOpen(run)}
+                            onClick={() => (isServer ? void handleOpenServer(run) : handleOpen(run))}
                             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
                           >
                             Open
                           </button>
                           <button
                             onClick={() => {
-                              if (
-                                !window.confirm(
-                                  'Remove this run from history? This only affects saved entries in this browser.',
-                                )
-                              ) {
-                                return
-                              }
+                              if (isServer) return void handleDeleteServer(run)
+                              if (!window.confirm('Remove this run from history? This only affects saved entries in this browser.')) return
                               void handleDelete(run.id)
                             }}
                             className="px-3 py-1.5 text-sm font-medium bg-red-50 border border-red-300 rounded-lg text-red-700 shadow-sm hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"

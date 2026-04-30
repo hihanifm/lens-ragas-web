@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from models import EvalRequest, ParsedFile
 from evaluator import detect_format, load_rows, run_evaluation
 from jobs import start_job, get_job, cancel_job, stream_job_sse
+from ollama_utils import normalize_ollama_base_url, preflight_ollama
+import db
 import config
 
 logging.basicConfig(
@@ -21,6 +23,14 @@ logging.basicConfig(
 logger = logging.getLogger("lens-ragas-web")
 
 app = FastAPI(title="lens-ragas-web")
+
+db.init_db(config.DB_PATH)
+try:
+    updated = db.reconcile_startup(config.DB_PATH)
+    if updated:
+        logger.info("db_reconcile_startup interrupted=%s", updated)
+except Exception as e:
+    logger.warning("db_reconcile_startup_failed err=%s", str(e))
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,18 +79,9 @@ def list_ollama_models(base_url: str | None = None):
     """
     Returns available Ollama model tags from /api/tags.
     """
-    url = (base_url or config.OLLAMA_BASE_URL or "").strip()
+    url = normalize_ollama_base_url(base_url or config.OLLAMA_BASE_URL)
     if not url:
         raise HTTPException(400, "Missing base_url.")
-
-    url = url.rstrip("/")
-    # In Docker, localhost/127.0.0.1 points to the container, not the host.
-    if os.path.exists("/.dockerenv"):
-        if url.startswith("http://localhost:") or url.startswith("http://127.0.0.1:"):
-            url = url.replace("http://localhost:", "http://host.docker.internal:")
-            url = url.replace("http://127.0.0.1:", "http://host.docker.internal:")
-        if url == "http://localhost" or url == "http://127.0.0.1":
-            url = "http://host.docker.internal:11434"
 
     tags_url = urllib.parse.urljoin(url + "/", "api/tags")
 
@@ -209,6 +210,19 @@ async def evaluate_start(req: EvalRequest):
     filepath = os.path.join(config.UPLOAD_DIR, req.file_id)
     if not os.path.exists(filepath):
         raise HTTPException(404, "File not found. Please re-upload.")
+
+    # Fast failure: check Ollama connectivity up front to avoid long "hangs".
+    if req.llm_provider == "ollama":
+        try:
+            working = preflight_ollama(req.ollama_base_url or config.OLLAMA_BASE_URL or "", timeout_s=2.0)
+            if working:
+                req.ollama_base_url = working
+        except Exception as e:
+            raise HTTPException(
+                502,
+                f"{e} If the backend runs in Docker, use http://host.docker.internal:11434 (not localhost).",
+            )
+
     msg = (
         f"evaluate_start file_id={req.file_id} provider={req.llm_provider} "
         f"model={(req.ollama_model if req.llm_provider == 'ollama' else req.openai_model)} "
@@ -223,6 +237,19 @@ async def evaluate_start(req: EvalRequest):
         ",".join(req.metrics or []),
     )
     job = start_job(filepath=filepath, req=req)
+    # Persist a durable run record for audit/debug.
+    project = (req.project or "").strip() or "default"
+    db.upsert_run(
+        config.DB_PATH,
+        job_id=job.id,
+        created_at=job.created_at,
+        status="running",
+        project=project,
+        provider=req.llm_provider,
+        model=(req.ollama_model if req.llm_provider == "ollama" else req.openai_model),
+        metrics=req.metrics or [],
+        file_id=req.file_id,
+    )
     print(f"job_started job_id={job.id}", flush=True)
     logger.info("job_started job_id=%s", job.id)
     return {"job_id": job.id}
@@ -239,9 +266,49 @@ async def evaluate_stream(job_id: str):
 @api.get("/evaluate/result/{job_id}")
 async def evaluate_result(job_id: str):
     job = get_job(job_id)
-    if not job:
+    if job:
+        return job.snapshot()
+    snap = db.get_run_snapshot(config.DB_PATH, job_id=job_id)
+    if not snap:
         raise HTTPException(404, "Job not found.")
-    return job.snapshot()
+    return snap
+
+
+@api.get("/runs")
+async def runs_list(project: str | None = None, limit: int = 50, offset: int = 0):
+    project_key = (project or "").strip() or None
+    return {"runs": db.list_runs(config.DB_PATH, project=project_key, limit=limit, offset=offset)}
+
+
+@api.get("/runs/{job_id}")
+async def runs_get(job_id: str):
+    snap = db.get_run_snapshot(config.DB_PATH, job_id=job_id)
+    if not snap:
+        raise HTTPException(404, "Run not found.")
+    # Return metadata + aggregate (rows are available via /runs/{job_id}/rows).
+    return {
+        "job_id": snap.get("id"),
+        "created_at": snap.get("created_at"),
+        "status": snap.get("status"),
+        "error": snap.get("error"),
+        "progress": snap.get("progress"),
+        "metrics": snap.get("metrics"),
+        "aggregate": snap.get("aggregate"),
+        "total": snap.get("total"),
+    }
+
+
+@api.get("/runs/{job_id}/rows")
+async def runs_rows(job_id: str, limit: int = 100, offset: int = 0):
+    return {"rows": db.list_run_rows(config.DB_PATH, job_id=job_id, limit=limit, offset=offset)}
+
+
+@api.delete("/runs/{job_id}")
+async def runs_delete(job_id: str):
+    ok = db.delete_run(config.DB_PATH, job_id=job_id)
+    if not ok:
+        raise HTTPException(404, "Run not found.")
+    return {"ok": True}
 
 
 @api.post("/evaluate/cancel/{job_id}")

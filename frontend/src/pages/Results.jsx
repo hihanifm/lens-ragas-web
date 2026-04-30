@@ -10,6 +10,7 @@ const METRIC_LABELS = {
 
 export default function Results({ results, onReset }) {
   const [current, setCurrent] = useState(results)
+  const [expanded, setExpanded] = useState(() => new Set())
 
   useEffect(() => {
     setCurrent(results)
@@ -41,6 +42,7 @@ export default function Results({ results, onReset }) {
   const isRunning =
     status === 'running' ||
     (!isFinal && expectedTotal != null && rows.length < expectedTotal)
+  const streamDisconnected = Boolean(meta?.stream_disconnected)
 
   function getGroundTruth(row) {
     return row?.ground_truth ?? row?.reference ?? null
@@ -121,6 +123,11 @@ export default function Results({ results, onReset }) {
             <p className="text-xs text-blue-700/80 mt-1">
               Final aggregates update when all rows are done. You can leave this page; progress is saved in History.
             </p>
+            {streamDisconnected && (
+              <p className="text-xs text-amber-800 mt-2">
+                Live streaming disconnected. Results will keep updating from History while the job runs.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -193,12 +200,12 @@ export default function Results({ results, onReset }) {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-3 py-3 font-medium text-gray-600 w-10">#</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[200px]">Question</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px]">Ground truth</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[220px]">
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px] max-w-[320px]">Question</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[160px] max-w-[280px]">Ground truth</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[200px] max-w-[360px]">
                   Retrieved contexts
                 </th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px]">Response</th>
+                <th className="text-left px-3 py-3 font-medium text-gray-600 min-w-[180px] max-w-[320px]">Response</th>
                 {metrics.map(m => (
                   <th key={m} className="text-center px-3 py-3 font-medium text-gray-600 whitespace-nowrap w-28">
                     {METRIC_LABELS[m] || m}
@@ -210,25 +217,38 @@ export default function Results({ results, onReset }) {
               {rows.map((row, i) => (
                 <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-3 text-gray-400 tabular-nums">{i + 1}</td>
-                  <td className="px-3 py-3 align-top min-w-[200px] max-w-md">
-                    <div className="text-xs text-gray-800 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {row.question || '—'}
-                    </div>
+                  <td className="px-3 py-3 align-top min-w-[180px] max-w-[320px]">
+                    <ExpandableCell
+                      value={row.question || '—'}
+                      cellKey={`${row.index ?? i}:question`}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                      tone="dark"
+                    />
                   </td>
-                  <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
-                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {cellOrDash(getGroundTruth(row))}
-                    </div>
+                  <td className="px-3 py-3 align-top min-w-[160px] max-w-[280px]">
+                    <ExpandableCell
+                      value={cellOrDash(getGroundTruth(row))}
+                      cellKey={`${row.index ?? i}:ground_truth`}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                    />
                   </td>
-                  <td className="px-3 py-3 align-top min-w-[220px] max-w-lg">
-                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {formatContextsCell(getContexts(row))}
-                    </div>
+                  <td className="px-3 py-3 align-top min-w-[200px] max-w-[360px]">
+                    <ExpandableCell
+                      value={formatContextsCell(getContexts(row))}
+                      cellKey={`${row.index ?? i}:contexts`}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                    />
                   </td>
-                  <td className="px-3 py-3 align-top min-w-[180px] max-w-md">
-                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                      {cellOrDash(getAnswer(row))}
-                    </div>
+                  <td className="px-3 py-3 align-top min-w-[180px] max-w-[320px]">
+                    <ExpandableCell
+                      value={cellOrDash(getAnswer(row))}
+                      cellKey={`${row.index ?? i}:answer`}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                    />
                   </td>
                   {metrics.map(m => (
                     <td
@@ -291,4 +311,49 @@ function formatContextsCell(ctx) {
   if (ctx == null) return '—'
   if (!Array.isArray(ctx) || ctx.length === 0) return '—'
   return ctx.map((c, i) => `(${i + 1}) ${c}`).join('\n\n')
+}
+
+function ExpandableCell({ value, cellKey, expanded, setExpanded, tone = 'normal' }) {
+  const text = String(value ?? '')
+  const isDash = text.trim() === '—'
+  const isExpanded = expanded.has(cellKey)
+
+  function toggle() {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(cellKey)) next.delete(cellKey)
+      else next.add(cellKey)
+      return next
+    })
+  }
+
+  const textClass = tone === 'dark' ? 'text-gray-800' : 'text-gray-700'
+
+  return (
+    <div className={`text-xs ${textClass} whitespace-pre-wrap break-words`}>
+      <div
+        style={
+          isExpanded
+            ? undefined
+            : {
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 6,
+                overflow: 'hidden',
+              }
+        }
+      >
+        {text}
+      </div>
+      {!isDash && (
+        <button
+          type="button"
+          onClick={toggle}
+          className="mt-1 text-[11px] text-blue-600 hover:underline"
+        >
+          {isExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  )
 }

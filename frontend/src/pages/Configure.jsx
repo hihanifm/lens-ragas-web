@@ -19,6 +19,7 @@ const METRIC_DESC = {
 export default function Configure({ parsedFile, onStartRun, onOpenResults, onBack }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
+  const [project, setProject] = useState(() => localStorage.getItem('lens-ragas-web:project:v1') || '')
 
   const [ollamaModel, setOllamaModel] = useState('llama3.2')
   const [ollamaModels, setOllamaModels] = useState([])
@@ -149,6 +150,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       file_id: parsedFile.file_id,
       metrics: selectedMetrics,
       llm_provider: provider,
+      project: project || undefined,
       ollama_base_url: ollamaUrl,
       ollama_model: ollamaModel,
       openai_api_key: openaiKey || undefined,
@@ -169,6 +171,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
     }
 
     try {
+      localStorage.setItem('lens-ragas-web:project:v1', project || '')
       const out = await onStartRun?.(req, meta)
       if (out?.runId) setActiveRunId(out.runId)
     } catch (e) {
@@ -367,6 +370,14 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
         )}
       </div>
 
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Project (optional)</h3>
+        <p className="text-xs text-gray-500 mb-2">
+          Use the same project name on multiple PCs to group runs together on the server. Leave blank for the default project.
+        </p>
+        <Field label="Project" value={project} onChange={setProject} placeholder="default" />
+      </div>
+
       {/* Progress / error */}
       {showRunBanner && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
@@ -379,6 +390,11 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
             {' · '}
             Open <span className="font-medium">History</span> anytime for details.
           </p>
+          {activeRun?.meta?.stream_disconnected && (
+            <p className="text-xs text-amber-800 mt-2">
+              Lost the live stream connection. The job can still be running; this page will keep updating from History.
+            </p>
+          )}
         </div>
       )}
       {error && (

@@ -15,3 +15,6 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "data", "runs.sqlite"))
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

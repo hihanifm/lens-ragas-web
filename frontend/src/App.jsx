@@ -58,12 +58,55 @@ export default function App() {
     runMeta.job_id = jobId
     saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
 
+    let pollId = null
+    let finalized = false
+    const finalizeOnce = () => {
+      if (finalized) return
+      finalized = true
+      setRunningCount(c => Math.max(0, c - 1))
+      cancelByRunIdRef.current.delete(runId)
+      if (pollId) {
+        clearInterval(pollId)
+        pollId = null
+      }
+    }
+
+    const pollResultUntilDone = () => {
+      if (pollId) return
+      const tick = async () => {
+        try {
+          const snap = await fetchEvaluationResult(jobId)
+          runMeta.status = snap.status || runMeta.status
+          runMeta.progress = snap.progress || runMeta.progress
+          runMeta.error = snap.error || runMeta.error
+          runMeta.metrics = snap.metrics || runMeta.metrics
+          runMeta.total = snap.total ?? runMeta.total
+
+          run.results.rows = snap.rows || run.results.rows
+          run.results.aggregate = snap.aggregate || run.results.aggregate
+          run.results.metrics = runMeta.metrics || run.results.metrics
+          run.results.total = runMeta.total ?? run.results.total
+
+          saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+
+          if (snap.status && snap.status !== 'running') {
+            finalizeOnce()
+          }
+        } catch {
+          // If polling fails intermittently, keep the run in "running" state and try again.
+        }
+      }
+      void tick()
+      pollId = setInterval(() => void tick(), 1500)
+    }
+
     const cancelStream = streamEvaluationJob(jobId, {
       onStart: ({ total, metrics }) => {
         runMeta.progress = { done: 0, total }
         runMeta.metrics = metrics || runMeta.metrics
         runMeta.total = total
         runMeta.status = 'running'
+        runMeta.stream_disconnected = false
         saveRunToHistory({
           meta: runMeta,
           results: { ...run.results, metrics: runMeta.metrics, total, meta: runMeta },
@@ -84,15 +127,23 @@ export default function App() {
         runMeta.status = 'complete'
         runMeta.progress = { done: run.results.total, total: run.results.total }
         saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
-        setRunningCount(c => Math.max(0, c - 1))
-        cancelByRunIdRef.current.delete(runId)
+        finalizeOnce()
       },
       onError: msg => {
-        runMeta.status = msg === 'cancelled' ? 'cancelled' : 'error'
-        runMeta.error = msg
+        if (msg === 'cancelled') {
+          runMeta.status = 'cancelled'
+          runMeta.error = msg
+          saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+          finalizeOnce()
+          return
+        }
+
+        // Treat non-cancel errors as likely transport errors first (SSE disconnect, proxy, tab sleep).
+        runMeta.stream_disconnected = true
+        runMeta.error =
+          'Connection lost while streaming results. The evaluation may still be running — progress will continue updating via History.'
         saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
-        setRunningCount(c => Math.max(0, c - 1))
-        cancelByRunIdRef.current.delete(runId)
+        pollResultUntilDone()
       },
     })
 
@@ -103,6 +154,10 @@ export default function App() {
         // ignore
       }
       cancelStream?.()
+      if (pollId) {
+        clearInterval(pollId)
+        pollId = null
+      }
     })
     return { runId, jobId }
   }

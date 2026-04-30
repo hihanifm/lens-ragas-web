@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Optional
 
 from evaluator import run_evaluation
+import config
+import db
 
 
 def _now_ms() -> int:
@@ -103,17 +105,25 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
                     job.total = data.get("total")
                     job.metrics = data.get("metrics") or []
                     job.progress = {"done": 0, "total": job.total}
+                    db.update_from_start(config.DB_PATH, job_id=job.id, total=job.total, metrics=job.metrics)
+                    db.append_event(config.DB_PATH, job_id=job.id, event="start", payload=data)
                 elif event == "row":
                     job.rows.append(data)
                     job.progress = {"done": len(job.rows), "total": job.total}
+                    db.upsert_row(config.DB_PATH, job_id=job.id, row=data)
+                    db.append_event(config.DB_PATH, job_id=job.id, event="row", payload={"index": data.get("index")})
                 elif event == "complete":
                     job.aggregate = data.get("aggregate") or {}
                     job.total = data.get("total") or job.total
                     job.progress = {"done": job.total or len(job.rows), "total": job.total}
                     job.status = "complete"
+                    db.set_complete(config.DB_PATH, job_id=job.id, aggregate=job.aggregate, total=job.total)
+                    db.append_event(config.DB_PATH, job_id=job.id, event="complete", payload=data)
                 elif event == "error":
                     job.status = "error"
                     job.error = data.get("message") or "Unknown error"
+                    db.set_error(config.DB_PATH, job_id=job.id, status="error", message=job.error)
+                    db.append_event(config.DB_PATH, job_id=job.id, event="error", payload=data)
 
             await _append(job, chunk)
 
@@ -121,6 +131,8 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
                 job.status = "cancelled"
                 print(f"job_cancelled job_id={job.id} done={len(job.rows)} total={job.total}", flush=True)
                 logger.info("job_cancelled job_id=%s done=%s total=%s", job.id, len(job.rows), job.total)
+                db.set_cancelled(config.DB_PATH, job_id=job.id)
+                db.append_event(config.DB_PATH, job_id=job.id, event="cancelled", payload={"message": "cancelled"})
                 await _append(job, "event: error\ndata: " + json.dumps({"message": "cancelled"}) + "\n\n")
                 return
 
@@ -128,11 +140,16 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
             # If generator ended early without complete/error, treat as cancelled or error.
             job.status = "cancelled" if job.cancelled else "error"
             job.error = job.error or ("cancelled" if job.cancelled else "Evaluation stopped unexpectedly")
+            if job.status == "cancelled":
+                db.set_cancelled(config.DB_PATH, job_id=job.id)
+            else:
+                db.set_error(config.DB_PATH, job_id=job.id, status="error", message=job.error)
     except Exception as e:
         job.status = "error"
         job.error = str(e)
         print(f"job_error job_id={job.id} err={str(e)}", flush=True)
         logger.exception("job_error job_id=%s err=%s", job.id, str(e))
+        db.set_error(config.DB_PATH, job_id=job.id, status="error", message=str(e))
         await _append(job, f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n")
     finally:
         job.last_update_ms = _now_ms()
