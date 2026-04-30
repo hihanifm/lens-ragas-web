@@ -9,6 +9,31 @@ from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, Conte
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ollama_utils import normalize_ollama_base_url
+import config
+import db
+
+
+def _maybe_record_llm_usage(req, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+    job_id = getattr(req, "job_id", None)
+    if not job_id:
+        return
+    pt = int(prompt_tokens or 0)
+    ct = int(completion_tokens or 0)
+
+    cost_add = None
+    if getattr(req, "llm_provider", None) == "openai":
+        inp = float(getattr(config, "OPENAI_USD_PER_1K_INPUT_TOKENS", 0.0) or 0.0)
+        out = float(getattr(config, "OPENAI_USD_PER_1K_OUTPUT_TOKENS", 0.0) or 0.0)
+        if inp > 0 or out > 0:
+            cost_add = (pt / 1000.0) * inp + (ct / 1000.0) * out
+
+    db.incr_llm_usage(
+        config.DB_PATH,
+        job_id=job_id,
+        prompt_tokens=pt,
+        completion_tokens=ct,
+        cost_usd_add=cost_add,
+    )
 
 def _row_extra_fields(src: dict) -> dict:
     """Fields from the input row for display in the UI (not from ragas scores)."""
@@ -91,11 +116,42 @@ def load_rows(filepath: str) -> list[dict]:
 def build_llm(req):
     if req.llm_provider == "openai":
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        import asyncio
+
+        class _CountingLLM:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def invoke(self, *args, **kwargs):
+                out = self._inner.invoke(*args, **kwargs)
+                # ChatOpenAI commonly returns an AIMessage with usage_metadata.
+                usage = getattr(out, "usage_metadata", None) or {}
+                _maybe_record_llm_usage(
+                    req,
+                    usage.get("input_tokens") or usage.get("prompt_tokens"),
+                    usage.get("output_tokens") or usage.get("completion_tokens"),
+                )
+                return out
+
+            async def ainvoke(self, *args, **kwargs):
+                out = await self._inner.ainvoke(*args, **kwargs)
+                usage = getattr(out, "usage_metadata", None) or {}
+                _maybe_record_llm_usage(
+                    req,
+                    usage.get("input_tokens") or usage.get("prompt_tokens"),
+                    usage.get("output_tokens") or usage.get("completion_tokens"),
+                )
+                return out
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
         logger.info("llm_provider=openai model=%s", req.openai_model or "gpt-4o-mini")
-        lc_llm = ChatOpenAI(
+        base_llm = ChatOpenAI(
             model=req.openai_model or "gpt-4o-mini",
             api_key=req.openai_api_key,
         )
+        lc_llm = _CountingLLM(base_llm)
         lc_emb = OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=req.openai_api_key,
@@ -103,11 +159,29 @@ def build_llm(req):
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
     else:
         from langchain_ollama import ChatOllama, OllamaEmbeddings
+        class _CountingLLM:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def invoke(self, *args, **kwargs):
+                out = self._inner.invoke(*args, **kwargs)
+                _maybe_record_llm_usage(req, None, None)
+                return out
+
+            async def ainvoke(self, *args, **kwargs):
+                out = await self._inner.ainvoke(*args, **kwargs)
+                _maybe_record_llm_usage(req, None, None)
+                return out
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
         base_url = normalize_ollama_base_url(req.ollama_base_url or "http://localhost:11434")
         model = req.ollama_model or "llama3.2"
 
         logger.info("llm_provider=ollama base_url=%s model=%s", base_url, model)
-        lc_llm = ChatOllama(model=model, base_url=base_url)
+        base_llm = ChatOllama(model=model, base_url=base_url)
+        lc_llm = _CountingLLM(base_llm)
         lc_emb = OllamaEmbeddings(model=model, base_url=base_url)
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
 

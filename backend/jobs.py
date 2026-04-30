@@ -55,6 +55,8 @@ class EvalJob:
     last_update_ms: int = field(default_factory=_now_ms)
 
     def snapshot(self) -> dict[str, Any]:
+        snap = db.get_run_snapshot(config.DB_PATH, job_id=self.id)
+        stats = snap.get("stats") if isinstance(snap, dict) else None
         return {
             "id": self.id,
             "created_at": self.created_at,
@@ -65,6 +67,7 @@ class EvalJob:
             "rows": self.rows,
             "aggregate": self.aggregate,
             "total": self.total,
+            "stats": stats,
         }
 
 
@@ -97,6 +100,11 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
         ",".join(getattr(req, "metrics", []) or []),
     )
     try:
+        # Provide job_id to the evaluator for callback-based stats.
+        try:
+            setattr(req, "job_id", job.id)
+        except Exception:
+            pass
         async for chunk in run_evaluation(filepath, req, is_disconnected=is_disconnected):
             parsed = _parse_sse_chunk(chunk)
             if parsed:
@@ -105,6 +113,7 @@ async def _run_job(job: EvalJob, filepath: str, req) -> None:
                     job.total = data.get("total")
                     job.metrics = data.get("metrics") or []
                     job.progress = {"done": 0, "total": job.total}
+                    db.mark_started(config.DB_PATH, job_id=job.id)
                     db.update_from_start(config.DB_PATH, job_id=job.id, total=job.total, metrics=job.metrics)
                     db.append_event(config.DB_PATH, job_id=job.id, event="start", payload=data)
                 elif event == "row":

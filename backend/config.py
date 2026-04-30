@@ -11,6 +11,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Optional cost estimation (USD per 1K tokens). If unset, cost stays null.
+OPENAI_USD_PER_1K_INPUT_TOKENS = float(os.getenv("OPENAI_USD_PER_1K_INPUT_TOKENS", "0") or "0")
+OPENAI_USD_PER_1K_OUTPUT_TOKENS = float(os.getenv("OPENAI_USD_PER_1K_OUTPUT_TOKENS", "0") or "0")
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")

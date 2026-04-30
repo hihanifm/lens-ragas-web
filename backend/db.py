@@ -35,6 +35,14 @@ def init_db(db_path: str) -> None:
                   metrics_json TEXT,
                   file_id TEXT,
                   input_filename TEXT,
+                  started_ms INTEGER,
+                  completed_ms INTEGER,
+                  elapsed_ms INTEGER,
+                  llm_calls INTEGER,
+                  prompt_tokens INTEGER,
+                  completion_tokens INTEGER,
+                  total_tokens INTEGER,
+                  cost_usd REAL,
                   total INTEGER,
                   progress_done INTEGER,
                   progress_total INTEGER,
@@ -77,6 +85,22 @@ def init_db(db_path: str) -> None:
             cols = {r["name"] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
             if "project" not in cols:
                 conn.execute("ALTER TABLE runs ADD COLUMN project TEXT")
+            if "started_ms" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN started_ms INTEGER")
+            if "completed_ms" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN completed_ms INTEGER")
+            if "elapsed_ms" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN elapsed_ms INTEGER")
+            if "llm_calls" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN llm_calls INTEGER")
+            if "prompt_tokens" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN prompt_tokens INTEGER")
+            if "completion_tokens" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN completion_tokens INTEGER")
+            if "total_tokens" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN total_tokens INTEGER")
+            if "cost_usd" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN cost_usd REAL")
         finally:
             conn.close()
 
@@ -117,9 +141,11 @@ def upsert_run(
                 """
                 INSERT INTO runs (
                   job_id, created_at, status, project, provider, model, metrics_json, file_id, input_filename,
+                  started_ms, completed_ms, elapsed_ms, llm_calls, prompt_tokens, completion_tokens, total_tokens, cost_usd,
                   total, progress_done, progress_total, aggregate_json, lens_metadata_json, error
                 ) VALUES (
                   ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  NULL, NULL, NULL, 0, 0, 0, 0, NULL,
                   NULL, 0, NULL, NULL, NULL, NULL
                 )
                 ON CONFLICT(job_id) DO UPDATE SET
@@ -133,6 +159,81 @@ def upsert_run(
                   input_filename=COALESCE(excluded.input_filename, runs.input_filename)
                 """,
                 (job_id, created_at, status, project, provider, model, payload, file_id, input_filename),
+            )
+        finally:
+            conn.close()
+
+
+def mark_started(db_path: str, *, job_id: str) -> None:
+    now = int(time.time() * 1000)
+    with _lock:
+        conn = _connect(db_path)
+        try:
+            conn.execute(
+                "UPDATE runs SET started_ms=COALESCE(started_ms, ?) WHERE job_id=?",
+                (now, job_id),
+            )
+        finally:
+            conn.close()
+
+
+def mark_finished(db_path: str, *, job_id: str) -> None:
+    now = int(time.time() * 1000)
+    with _lock:
+        conn = _connect(db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE runs
+                SET completed_ms=?,
+                    elapsed_ms=CASE
+                      WHEN started_ms IS NOT NULL THEN (? - started_ms)
+                      ELSE elapsed_ms
+                    END
+                WHERE job_id=?
+                """,
+                (now, now, job_id),
+            )
+        finally:
+            conn.close()
+
+
+def incr_llm_usage(
+    db_path: str,
+    *,
+    job_id: str,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    cost_usd_add: float | None = None,
+) -> None:
+    pt = int(prompt_tokens or 0)
+    ct = int(completion_tokens or 0)
+    with _lock:
+        conn = _connect(db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE runs
+                SET llm_calls=COALESCE(llm_calls,0)+1,
+                    prompt_tokens=COALESCE(prompt_tokens,0)+?,
+                    completion_tokens=COALESCE(completion_tokens,0)+?,
+                    total_tokens=COALESCE(total_tokens,0)+?,
+                    cost_usd=CASE
+                      WHEN ? IS NULL THEN cost_usd
+                      WHEN cost_usd IS NULL THEN ?
+                      ELSE cost_usd + ?
+                    END
+                WHERE job_id=?
+                """,
+                (
+                    pt,
+                    ct,
+                    pt + ct,
+                    cost_usd_add,
+                    cost_usd_add,
+                    cost_usd_add,
+                    job_id,
+                ),
             )
         finally:
             conn.close()
@@ -239,6 +340,7 @@ def set_complete(db_path: str, *, job_id: str, aggregate: dict[str, Any], total:
             )
         finally:
             conn.close()
+    mark_finished(db_path, job_id=job_id)
 
 
 def set_error(db_path: str, *, job_id: str, status: str, message: str) -> None:
@@ -256,6 +358,8 @@ def set_error(db_path: str, *, job_id: str, status: str, message: str) -> None:
             )
         finally:
             conn.close()
+    if status in ("error", "cancelled", "interrupted"):
+        mark_finished(db_path, job_id=job_id)
 
 
 def set_cancelled(db_path: str, *, job_id: str) -> None:
@@ -301,6 +405,16 @@ def get_run_snapshot(db_path: str, *, job_id: str) -> Optional[dict[str, Any]]:
             "rows": out_rows,
             "aggregate": agg,
             "total": r["total"],
+            "stats": {
+                "started_ms": r["started_ms"],
+                "completed_ms": r["completed_ms"],
+                "elapsed_ms": r["elapsed_ms"],
+                "llm_calls": r["llm_calls"],
+                "prompt_tokens": r["prompt_tokens"],
+                "completion_tokens": r["completion_tokens"],
+                "total_tokens": r["total_tokens"],
+                "cost_usd": r["cost_usd"],
+            },
         }
     finally:
         conn.close()

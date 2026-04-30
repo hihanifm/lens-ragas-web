@@ -43,6 +43,11 @@ export default function Results({ results, onReset }) {
     status === 'running' ||
     (!isFinal && expectedTotal != null && rows.length < expectedTotal)
   const streamDisconnected = Boolean(meta?.stream_disconnected)
+  const stats = meta?.stats || current?.stats || null
+  const elapsedMs = stats?.elapsed_ms
+  const llmCalls = stats?.llm_calls
+  const totalTokens = stats?.total_tokens
+  const costUsd = stats?.cost_usd
 
   function getGroundTruth(row) {
     return row?.ground_truth ?? row?.reference ?? null
@@ -138,6 +143,14 @@ export default function Results({ results, onReset }) {
           Aggregate scores
           {isRunning ? ` (partial — ${rows.length} of ${expectedTotal ?? '?'} rows)` : ` (${rows.length} rows)`}
         </h2>
+        {(elapsedMs != null || llmCalls != null || totalTokens != null || costUsd != null) && (
+          <div className="text-xs text-gray-500 mb-3">
+            {elapsedMs != null && <span className="mr-3">Latency: {(elapsedMs / 1000).toFixed(1)}s</span>}
+            {llmCalls != null && <span className="mr-3">LLM calls: {llmCalls}</span>}
+            {totalTokens != null && <span className="mr-3">Tokens: {totalTokens}</span>}
+            {costUsd != null && <span className="mr-3">Cost: ${Number(costUsd).toFixed(4)}</span>}
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {metrics.map(m => (
             <div key={m} className="bg-gray-50 rounded-lg px-4 py-3 text-center">
@@ -196,7 +209,7 @@ export default function Results({ results, onReset }) {
       {/* Per-row table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-max min-w-full text-sm">
+          <table className="min-w-[1200px] w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-3 py-3 font-medium text-gray-600 w-10">#</th>
@@ -330,7 +343,7 @@ function ExpandableCell({ value, cellKey, expanded, setExpanded, tone = 'normal'
   const textClass = tone === 'dark' ? 'text-gray-800' : 'text-gray-700'
 
   return (
-    <div className={`text-xs ${textClass} whitespace-pre-wrap break-words`}>
+    <div className={`text-xs ${textClass} whitespace-pre`}>
       <div
         style={
           isExpanded
