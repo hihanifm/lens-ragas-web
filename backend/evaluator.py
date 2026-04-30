@@ -77,8 +77,7 @@ def build_llm(req):
         )
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
     else:
-        from langchain_community.chat_models import ChatOllama
-        from langchain_community.embeddings import OllamaEmbeddings
+        from langchain_ollama import ChatOllama, OllamaEmbeddings
         base_url = req.ollama_base_url or "http://localhost:11434"
         model = req.ollama_model or "llama3.2"
         lc_llm = ChatOllama(model=model, base_url=base_url)

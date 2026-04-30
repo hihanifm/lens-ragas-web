@@ -6,5 +6,6 @@ pandas==2.2.3
 openpyxl==3.1.5
 ragas==0.2.15
 langchain-community==0.3.15
+langchain-ollama
 langchain-openai==0.3.1
 python-dotenv==1.0.1
