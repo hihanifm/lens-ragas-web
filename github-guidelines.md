@@ -1,14 +1,34 @@
-# GitHub workflow guidelines (public upstream + private origin)
+---
+name: github-public-upstream-private-origin
+description: Safe git workflow for OSS upstream + private mirror (disable public pushes, sync via public-main/private-main)
+version: 1.0
+applies_to: ["git", "github", "release-workflow"]
+rules:
+  - Never push to public GitHub
+  - upstream is fetch-only; upstream push URL must be DISABLED
+  - Only push to origin (private/internal)
+  - Prefer working on private-main or branches from it
+  - Before any push, run `git where` and verify remotes
+usage:
+  - Run the one-time setup script from repo root
+  - Use aliases: pub-pull, priv-pull, priv-push
+---
 
-This repo is developed **open source** on public GitHub, and also mirrored to a **private/internal GitHub** for lab-specific work (e.g., internal LLM adapters).
+# SKILL: Public upstream + private origin Git workflow
 
-The goal is:
-- **Pull updates from public** (upstream) safely
-- **Push only to private** (origin)
-- Keep the two histories easy to sync with minimal merge pain
-- Prevent accidental pushes to public GitHub
+## Purpose
 
-These rules are written so a coding agent (e.g., Cline) can follow them reliably.
+Use this workflow when you develop a project **open source** on public GitHub, but also maintain a **private/internal mirror** for lab-only changes. It prevents accidental public pushes and keeps upstream merges smooth.
+
+## Non‑negotiable rules (agents must honor)
+
+- **Never push to public GitHub**.
+- `upstream` is **fetch-only** (its push URL must be **DISABLED**).
+- Only push to `origin` (private/internal).
+- Do work on `private-main` (or feature branches created from it).
+- Before any push: run `git where` and verify:
+  - `origin` is **not** `github.com`
+  - `upstream` push URL is **DISABLED**
 
 ---
 
@@ -18,6 +38,7 @@ These rules are written so a coding agent (e.g., Cline) can follow them reliably
 - **`origin`** = private/internal GitHub repo (**the only push target**)
 
 Two local “main equivalents”:
+
 - **`public-main`** tracks `upstream/main`
 - **`private-main`** tracks `origin/main`
 
@@ -37,11 +58,16 @@ set -euo pipefail
 
 echo "== Dual-remote setup (public upstream + private origin) =="
 
+# Non-interactive agents (like Cline) may not show prompts.
+# If stdin is not a TTY, require PRIVATE_URL to be provided explicitly.
+IS_TTY=0
+if [[ -t 0 ]]; then IS_TTY=1; fi
+
 # Auto-detect the public URL from an existing clone when possible:
 # - public: github.com
 # - private/internal: github.<corp>.com (or anything not github.com)
 PUBLIC_URL=""
-PRIVATE_URL=""
+PRIVATE_URL="${PRIVATE_URL:-}"
 
 if git remote get-url origin >/dev/null 2>&1; then
   ORIGIN_URL="$(git remote get-url origin)"
@@ -60,15 +86,34 @@ if [[ -z "$PUBLIC_URL" ]] && git remote get-url upstream >/dev/null 2>&1; then
 fi
 
 if [[ -z "$PUBLIC_URL" ]]; then
-  read -r -p "Public GitHub repo URL (github.com, fetch-only): " PUBLIC_URL
+  if [[ "$IS_TTY" -eq 1 ]]; then
+    read -r -p "Public GitHub repo URL (github.com, fetch-only): " PUBLIC_URL
+  else
+    echo "ERROR: Could not auto-detect PUBLIC_URL and prompts are disabled (non-interactive)."
+    echo "Set PUBLIC_URL env var or run this script in an interactive terminal."
+    exit 2
+  fi
 else
   echo "Detected public repo: $PUBLIC_URL"
 fi
 
 if [[ -z "$PRIVATE_URL" ]]; then
-  read -r -p "Private/internal GitHub repo URL (github.<corp>.com, push target): " PRIVATE_URL
+  if [[ "$IS_TTY" -eq 1 ]]; then
+    read -r -p "Private/internal GitHub repo URL (github.<corp>.com, push target): " PRIVATE_URL
+  else
+    echo "ERROR: PRIVATE_URL is required in non-interactive mode."
+    echo "Example: PRIVATE_URL=https://github.<corp>.com/org/repo.git ./git-dual-remote-setup.sh"
+    exit 2
+  fi
 else
   echo "Detected private repo: $PRIVATE_URL"
+fi
+
+# Guardrail: private URL must not be github.com
+if [[ "$PRIVATE_URL" == *"github.com"* ]]; then
+  echo "ERROR: PRIVATE_URL points to github.com. Refusing to configure a public repo as private."
+  echo "PRIVATE_URL=$PRIVATE_URL"
+  exit 2
 fi
 
 DEFAULT_BASE_BRANCH="main"
@@ -150,6 +195,14 @@ chmod +x git-dual-remote-setup.sh
 ./git-dual-remote-setup.sh
 ```
 
+### Cline / non-interactive quick-start
+
+Agents often run without interactive prompts. Use:
+
+```bash
+PRIVATE_URL="https://github.<corp>.com/<org>/<repo>.git" ./git-dual-remote-setup.sh
+```
+
 ---
 
 ## Daily commands (agent-safe)
@@ -222,4 +275,21 @@ git priv-push
 - Prefer working from **`private-main`** for any changes that will be pushed.
 - Treat public GitHub as **read-only** in this clone.
 - Before pushing, run `git where` and confirm `upstream` push URL is `DISABLED`.
+
+## Examples (copy/paste)
+
+### Sync latest OSS changes into private and push
+
+```bash
+git pub-pull
+git switch private-main
+git merge public-main
+git priv-push
+```
+
+### Sanity-check remotes before pushing
+
+```bash
+git where
+```
 
