@@ -1,5 +1,6 @@
 ---
-name: github-public-upstream-private-origin
+
+## name: github-public-upstream-private-origin
 description: Safe git workflow for OSS upstream + private mirror (disable public pushes, sync via public-main/private-main)
 version: 1.0
 applies_to: ["git", "github", "release-workflow"]
@@ -12,7 +13,6 @@ rules:
 usage:
   - Run the one-time setup script from repo root
   - Use aliases: pub-pull, priv-pull, priv-push
----
 
 # SKILL: Public upstream + private origin Git workflow
 
@@ -34,15 +34,15 @@ Use this workflow when you develop a project **open source** on public GitHub, b
 
 ## Remotes and branch model
 
-- **`upstream`** = public GitHub repo (**fetch-only**; pushing is disabled)
-- **`origin`** = private/internal GitHub repo (**the only push target**)
+- `**upstream`** = public GitHub repo (**fetch-only**; pushing is disabled)
+- `**origin`** = private/internal GitHub repo (**the only push target**)
 
 Two local “main equivalents”:
 
-- **`public-main`** tracks `upstream/main`
-- **`private-main`** tracks `origin/main`
+- `**public-main`** tracks `upstream/main`
+- `**private-main**` tracks `origin/main`
 
-Work branches should be created from **`private-main`** and pushed only to **`origin`**.
+Work branches should be created from `**private-main**` and pushed only to `**origin**`.
 
 ---
 
@@ -272,7 +272,7 @@ git priv-push
 
 - **Never push to `upstream`**.
 - **Only push to `origin`**.
-- Prefer working from **`private-main`** for any changes that will be pushed.
+- Prefer working from `**private-main**` for any changes that will be pushed.
 - Treat public GitHub as **read-only** in this clone.
 - Before pushing, run `git where` and confirm `upstream` push URL is `DISABLED`.
 

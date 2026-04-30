@@ -1,6 +1,23 @@
-# Ollama guidelines
+---
 
-Notes worth reusing in future projects (and for teammates).
+## name: ollama-docker-guidelines
+
+description: Guardrails for using Ollama from Dockerized backends (base URL normalization, preflight checks, common traps)
+version: 1.0
+applies_to: ["ollama", "docker", "fastapi", "langchain"]
+rules:
+
+- Never assume localhost inside containers reaches the host
+- Normalize Ollama base URL in one place and reuse everywhere
+- Fail fast with a short preflight check before starting jobs
+- Avoid module name collisions (do not name helpers ollama.py)
+usage:
+- When wiring an Ollama provider, apply these rules to all call paths (model listing + evaluation + health)
+- Prefer active fallback (try host.docker.internal) over brittle Docker detection
+
+# SKILL: Ollama guidelines
+
+Reusable notes for this repo and similar projects.
 
 ## Ollama + Docker: the “localhost” trap
 
