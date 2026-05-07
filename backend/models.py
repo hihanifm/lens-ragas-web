@@ -16,6 +16,7 @@ class EvalRequest(BaseModel):
     ollama_model: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_model: Optional[str] = None
+    openai_base_url: Optional[str] = None
 
 
 class ParsedFile(BaseModel):

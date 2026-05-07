@@ -10,6 +10,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# Optional OpenAI-compatible API root (e.g. https://api.openai.com/v1 or a proxy). Empty = SDK default.
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "").strip()
 
 # Optional cost estimation (USD per 1K tokens). If unset, cost stays null.
 OPENAI_USD_PER_1K_INPUT_TOKENS = float(os.getenv("OPENAI_USD_PER_1K_INPUT_TOKENS", "0") or "0")

@@ -15,6 +15,7 @@ from models import EvalRequest, ParsedFile, ParseMapRequest
 from evaluator import detect_format, load_rows, run_evaluation, read_tabular_rows
 from jobs import start_job, get_job, cancel_job, stream_job_sse
 from ollama_utils import normalize_ollama_base_url, preflight_ollama
+from openai_utils import normalize_openai_api_root
 import db
 import config
 
@@ -74,6 +75,7 @@ def get_config():
         "ollama_model": config.OLLAMA_MODEL,
         "openai_api_key": config.OPENAI_API_KEY,
         "openai_model": config.OPENAI_MODEL,
+        "openai_base_url": config.OPENAI_BASE_URL or None,
     }
 
 @api.get("/ollama/models")
@@ -104,16 +106,25 @@ def list_ollama_models(base_url: str | None = None):
     return {"models": sorted(set(names))}
 
 @api.get("/openai/models")
-def list_openai_models(request: Request):
+def list_openai_models(request: Request, base_url: str | None = None):
     """
     Fetch available OpenAI models from /v1/models.
     API key can be provided via `X-OpenAI-Api-Key` header; falls back to env default.
+    Optional query ``base_url`` targets a custom OpenAI-compatible root (same as evaluation).
     """
     api_key = (request.headers.get("x-openai-api-key") or config.OPENAI_API_KEY or "").strip()
     if not api_key:
         raise HTTPException(400, "Missing OpenAI API key.")
 
-    url = "https://api.openai.com/v1/models"
+    raw = (base_url or config.OPENAI_BASE_URL or "").strip()
+    if raw:
+        try:
+            root = normalize_openai_api_root(raw)
+        except ValueError:
+            raise HTTPException(400, "Invalid base_url.")
+    else:
+        root = "https://api.openai.com/v1"
+    url = urllib.parse.urljoin(root + "/", "models")
     try:
         req = urllib.request.Request(
             url,

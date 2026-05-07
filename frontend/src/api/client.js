@@ -4,8 +4,12 @@ import { API_BASE } from '../utils/basePath'
 
 const api = axios.create({ baseURL: API_BASE })
 
-/** After the first failure wait 10s, after the second wait 20s (2 retries total). */
-const TRANSIENT_RETRY_BACKOFF_MS = [10_000, 20_000]
+/** Up to 5 retries after the first attempt; delays 10s, 20s, 40s, 80s, 160s (exponential from 10s). */
+const TRANSIENT_RETRY_COUNT = 5
+const TRANSIENT_RETRY_DELAYS_MS = Array.from(
+  { length: TRANSIENT_RETRY_COUNT },
+  (_, i) => 10_000 * 2 ** i,
+)
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -22,20 +26,20 @@ function isRetryableAxiosError(e) {
 }
 
 /**
- * Run `fn` once, then up to two more times after 10s and 20s delays on transient/network errors.
+ * Run `fn` once, then on transient/network errors retry up to 5 times with exponential backoff from 10s.
  */
 export async function retryTransientRequest(fn) {
   let lastErr
-  for (let attempt = 0; attempt <= TRANSIENT_RETRY_BACKOFF_MS.length; attempt++) {
+  for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
     try {
       return await fn()
     } catch (e) {
       lastErr = e
       const canRetry = isRetryableAxiosError(e)
-      if (!canRetry || attempt >= TRANSIENT_RETRY_BACKOFF_MS.length) {
+      if (!canRetry || attempt >= TRANSIENT_RETRY_DELAYS_MS.length) {
         throw lastErr
       }
-      await sleep(TRANSIENT_RETRY_BACKOFF_MS[attempt])
+      await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt])
     }
   }
   throw lastErr
@@ -83,8 +87,12 @@ export async function fetchOllamaModels(baseUrl) {
   return data?.models || []
 }
 
-export async function fetchOpenAIModels(apiKey) {
+export async function fetchOpenAIModels(apiKey, baseUrl) {
+  const params = {}
+  const u = typeof baseUrl === 'string' ? baseUrl.trim() : ''
+  if (u) params.base_url = u
   const { data } = await api.get('/openai/models', {
+    params,
     headers: apiKey ? { 'X-OpenAI-Api-Key': apiKey } : undefined,
   })
   return data?.models || []
@@ -136,7 +144,7 @@ export function streamEvaluationJob(jobId, { onStart, onRow, onComplete, onError
   ;(async () => {
     let lastFailMsg = ''
 
-    for (let attempt = 0; attempt <= TRANSIENT_RETRY_BACKOFF_MS.length; attempt++) {
+    for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
       if (ctrl.signal.aborted) return
 
       try {
@@ -149,9 +157,9 @@ export function streamEvaluationJob(jobId, { onStart, onRow, onComplete, onError
         if (!res.ok) {
           const text = await res.text()
           lastFailMsg = text || `HTTP ${res.status}`
-          const retry = isTransientHttpStatus(res.status) && attempt < TRANSIENT_RETRY_BACKOFF_MS.length
+          const retry = isTransientHttpStatus(res.status) && attempt < TRANSIENT_RETRY_DELAYS_MS.length
           if (retry) {
-            await sleep(TRANSIENT_RETRY_BACKOFF_MS[attempt])
+            await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt])
             continue
           }
           onError(lastFailMsg)
@@ -195,8 +203,8 @@ export function streamEvaluationJob(jobId, { onStart, onRow, onComplete, onError
       } catch (err) {
         if (err.name === 'AbortError') return
         lastFailMsg = err.message || String(err)
-        if (attempt < TRANSIENT_RETRY_BACKOFF_MS.length) {
-          await sleep(TRANSIENT_RETRY_BACKOFF_MS[attempt])
+        if (attempt < TRANSIENT_RETRY_DELAYS_MS.length) {
+          await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt])
           continue
         }
         onError(lastFailMsg)

@@ -235,6 +235,7 @@ export default function Results({ results, onReset, onCancelRunningJob }) {
                 <KeyVal k="provider" v={meta?.llm_provider || meta?.provider} />
                 <KeyVal k="ollama_model" v={meta?.ollama_model} />
                 <KeyVal k="openai_model" v={meta?.openai_model} />
+                <KeyVal k="openai_base_url" v={meta?.openai_base_url} />
                 <KeyVal k="ollama_base_url" v={meta?.ollama_base_url} />
                 <KeyVal k="project" v={meta?.project} />
               </div>

@@ -9,6 +9,7 @@ from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, Conte
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ollama_utils import normalize_ollama_base_url
+from openai_utils import normalize_openai_api_root
 import config
 import db
 
@@ -227,9 +228,17 @@ class _CountingLLMProxy:
     __slots__ = ("_inner", "_req", "_track_tokens")
 
     def __init__(self, inner, req, *, track_tokens: bool):
-        self._inner = inner
-        self._req = req
-        self._track_tokens = track_tokens
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_req", req)
+        object.__setattr__(self, "_track_tokens", track_tokens)
+
+    def __setattr__(self, name, value):
+        # Ragas sets e.g. `.temperature` on the wrapped LLM (LangchainLLMWrapper); reads use __getattr__
+        # but writes must be forwarded — slotted proxy would otherwise raise AttributeError on assignment.
+        if name in _CountingLLMProxy.__slots__:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, "_inner"), name, value)
 
     def invoke(self, *args, **kwargs):
         _log_llm("llm.invoke_in", self._req, _format_invoke_args(args, kwargs))
@@ -383,16 +392,37 @@ def build_llm(req):
     if req.llm_provider == "openai":
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-        logger.info("llm_provider=openai model=%s", req.openai_model or "gpt-4o-mini")
-        base_llm = ChatOpenAI(
-            model=req.openai_model or "gpt-4o-mini",
-            api_key=req.openai_api_key,
+        raw_base = (
+            (getattr(req, "openai_base_url", None) or "").strip()
+            or (getattr(config, "OPENAI_BASE_URL", None) or "").strip()
         )
+        api_root = None
+        if raw_base:
+            try:
+                api_root = normalize_openai_api_root(raw_base)
+            except ValueError:
+                raise ValueError("Invalid OpenAI base URL.") from None
+
+        logger.info(
+            "llm_provider=openai model=%s base_url=%s",
+            req.openai_model or "gpt-4o-mini",
+            api_root or "(default)",
+        )
+        llm_kw = {
+            "model": req.openai_model or "gpt-4o-mini",
+            "api_key": req.openai_api_key,
+        }
+        emb_kw = {
+            "model": "text-embedding-3-small",
+            "api_key": req.openai_api_key,
+        }
+        if api_root:
+            llm_kw["base_url"] = api_root
+            emb_kw["base_url"] = api_root
+
+        base_llm = ChatOpenAI(**llm_kw)
         lc_llm = _CountingLLMProxy(base_llm, req, track_tokens=True)
-        lc_emb = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            api_key=req.openai_api_key,
-        )
+        lc_emb = OpenAIEmbeddings(**emb_kw)
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
 
     from langchain_ollama import ChatOllama, OllamaEmbeddings

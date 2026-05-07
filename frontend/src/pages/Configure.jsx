@@ -24,6 +24,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
   const [ollamaModels, setOllamaModels] = useState([])
   const [ollamaModelsStatus, setOllamaModelsStatus] = useState({ loading: false, error: null })
   const [openaiKey, setOpenaiKey] = useState('')
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('')
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini')
   const [openaiModels, setOpenaiModels] = useState([])
   const [openaiModelsStatus, setOpenaiModelsStatus] = useState({ loading: false, error: null })
@@ -40,6 +41,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       if (cfg.ollama_base_url) setOllamaUrl(cfg.ollama_base_url)
       if (cfg.ollama_model) setOllamaModel(cfg.ollama_model)
       if (cfg.openai_api_key) setOpenaiKey(cfg.openai_api_key)
+      if (cfg.openai_base_url) setOpenaiBaseUrl(cfg.openai_base_url)
       if (cfg.openai_model) setOpenaiModel(cfg.openai_model)
     }).catch(() => {})
   }, [])
@@ -67,40 +69,26 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
     }
   }, [provider, ollamaUrl])
 
-  useEffect(() => {
-    if (provider !== 'openai') return
+  async function loadOpenaiModelList() {
     const key = String(openaiKey || '').trim()
     if (!key) {
       setOpenaiModels([])
-      setOpenaiModelsStatus({ loading: false, error: null })
+      setOpenaiModelsStatus({ loading: false, error: 'Enter an API key, then fetch models.' })
       return
     }
-
-    let cancelled = false
     setOpenaiModelsStatus({ loading: true, error: null })
-
-    const t = setTimeout(() => {
-      fetchOpenAIModels(key)
-        .then(models => {
-          if (cancelled) return
-          setOpenaiModels(Array.isArray(models) ? models : [])
-          setOpenaiModelsStatus({ loading: false, error: null })
-        })
-        .catch(err => {
-          if (cancelled) return
-          setOpenaiModels([])
-          setOpenaiModelsStatus({
-            loading: false,
-            error: err?.response?.data?.detail || err?.message || 'Failed to load models',
-          })
-        })
-    }, 400) // small debounce for typing
-
-    return () => {
-      cancelled = true
-      clearTimeout(t)
+    try {
+      const models = await fetchOpenAIModels(key, openaiBaseUrl)
+      setOpenaiModels(Array.isArray(models) ? models : [])
+      setOpenaiModelsStatus({ loading: false, error: null })
+    } catch (err) {
+      setOpenaiModels([])
+      setOpenaiModelsStatus({
+        loading: false,
+        error: err?.response?.data?.detail || err?.message || 'Failed to load models',
+      })
     }
-  }, [provider, openaiKey])
+  }
 
   useEffect(() => {
     if (!activeRunId) return
@@ -153,10 +141,16 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       project: projectValue || undefined,
       column_map: parsedFile?.column_map || undefined,
       input_filename: parsedFile?.input_filename || undefined,
-      ollama_base_url: ollamaUrl,
-      ollama_model: ollamaModel,
-      openai_api_key: openaiKey || undefined,
-      openai_model: openaiModel,
+      ...(provider === 'ollama'
+        ? { ollama_base_url: ollamaUrl, ollama_model: ollamaModel }
+        : {}),
+      ...(provider === 'openai'
+        ? {
+            openai_api_key: openaiKey || undefined,
+            openai_model: openaiModel,
+            openai_base_url: openaiBaseUrl.trim() || undefined,
+          }
+        : {}),
     }
     const meta = {
       llm_provider: provider,
@@ -164,6 +158,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       ollama_base_url: provider === 'ollama' ? ollamaUrl : undefined,
       ollama_model: provider === 'ollama' ? ollamaModel : undefined,
       openai_model: provider === 'openai' ? openaiModel : undefined,
+      openai_base_url: provider === 'openai' && openaiBaseUrl.trim() ? openaiBaseUrl.trim() : undefined,
       file_id: parsedFile?.file_id,
       row_count: parsedFile?.row_count,
       format: parsedFile?.format,
@@ -331,7 +326,34 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
           </div>
         ) : (
           <div className="space-y-3">
+            <Field
+              label="API base URL"
+              value={openaiBaseUrl}
+              onChange={setOpenaiBaseUrl}
+              placeholder="https://api.openai.com/v1 (optional)"
+            />
+            <p className="text-xs text-gray-500 -mt-2">
+              Leave blank for the default OpenAI API. Set this for a compatible proxy or hosted endpoint.
+            </p>
             <Field label="API Key" value={openaiKey} onChange={setOpenaiKey} placeholder="sk-..." type="password" />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadOpenaiModelList()}
+                disabled={openaiModelsStatus.loading || !String(openaiKey || '').trim()}
+                title={
+                  String(openaiKey || '').trim()
+                    ? 'Load model IDs from the API'
+                    : 'Enter an API key first'
+                }
+                className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {openaiModelsStatus.loading ? 'Fetching models…' : 'Fetch models'}
+              </button>
+              {!openaiModels.length && !openaiModelsStatus.loading && !openaiModelsStatus.error && (
+                <span className="text-xs text-gray-500">Click after entering your key and optional base URL.</span>
+              )}
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
               {openaiModelsStatus.loading ? (
