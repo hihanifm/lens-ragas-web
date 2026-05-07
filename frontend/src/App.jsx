@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Upload from './pages/Upload'
 import Configure from './pages/Configure'
 import Results from './pages/Results'
@@ -8,11 +8,25 @@ import { uuid } from './utils/uuid'
 import Footer from './components/Footer'
 import { cancelEvaluationJob, fetchEvaluationResult, startEvaluationJob, streamEvaluationJob } from './api/client'
 
+/** Insert or replace by SSE `row.index` so stream replay cannot duplicate rows. */
+function upsertEvalRow(rows, row) {
+  const idx = row?.index
+  if (typeof idx !== 'number') {
+    rows.push(row)
+    return
+  }
+  const pos = rows.findIndex(r => r && r.index === idx)
+  if (pos >= 0) rows[pos] = row
+  else rows.push(row)
+  rows.sort((a, b) => (a?.index ?? 0) - (b?.index ?? 0))
+}
+
 export default function App() {
   const [step, setStep] = useState('upload') // upload | configure | results | history
   const [parsedFile, setParsedFile] = useState(null)
   const [evalResults, setEvalResults] = useState(null)
   const cancelByRunIdRef = useRef(new Map()) // runId -> cancelFn
+  const attachedJobIdsRef = useRef(new Set())
   const [runningCount, setRunningCount] = useState(0)
 
   const runningSummary = useMemo(() => {
@@ -20,49 +34,23 @@ export default function App() {
     return `${runningCount} running`
   }, [runningCount])
 
-  function handleParsed(data) {
-    setParsedFile(data)
-    setStep('configure')
-  }
+  const attachRunningJob = useCallback(({ runId, jobId, run, skipRunningCountBump }) => {
+    if (!jobId || !runId || !run?.meta) return
+    if (attachedJobIdsRef.current.has(jobId)) return
 
-  function handleLoadScores(results) {
-    setParsedFile(null)
-    setEvalResults(results)
-    setStep('results')
-  }
-
-  async function startRun(req, meta = {}) {
-    const runId = uuid()
-    const runMeta = {
-      id: runId,
-      createdAt: new Date().toISOString(),
-      status: 'running',
-      progress: { done: 0, total: null },
-      ...meta,
+    attachedJobIdsRef.current.add(jobId)
+    if (!skipRunningCountBump) {
+      setRunningCount(c => c + 1)
     }
 
-    const run = {
-      meta: runMeta,
-      results: {
-        rows: [],
-        aggregate: {},
-        metrics: meta?.metrics || req?.metrics || [],
-        total: null,
-        meta: runMeta,
-      },
-    }
-    saveRunToHistory(run)
-    setRunningCount(c => c + 1)
-
-    const jobId = await startEvaluationJob(req)
-    runMeta.job_id = jobId
-    saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
-
+    const runMeta = run.meta
     let pollId = null
     let finalized = false
+
     const finalizeOnce = () => {
       if (finalized) return
       finalized = true
+      attachedJobIdsRef.current.delete(jobId)
       setRunningCount(c => Math.max(0, c - 1))
       cancelByRunIdRef.current.delete(runId)
       if (pollId) {
@@ -103,6 +91,7 @@ export default function App() {
 
     const cancelStream = streamEvaluationJob(jobId, {
       onStart: ({ total, metrics }) => {
+        run.results.rows = []
         runMeta.progress = { done: 0, total }
         runMeta.metrics = metrics || runMeta.metrics
         runMeta.total = total
@@ -114,7 +103,7 @@ export default function App() {
         })
       },
       onRow: row => {
-        run.results.rows.push(row)
+        upsertEvalRow(run.results.rows, row)
         runMeta.progress = { ...runMeta.progress, done: run.results.rows.length }
         saveRunToHistory({
           meta: runMeta,
@@ -128,7 +117,6 @@ export default function App() {
         runMeta.status = 'complete'
         runMeta.progress = { done: run.results.total, total: run.results.total }
         saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
-        // SSE completion doesn't include run stats; fetch a final snapshot so Results can show latency/tokens/calls.
         fetchEvaluationResult(jobId)
           .then(snap => {
             if (snap?.stats) {
@@ -148,7 +136,6 @@ export default function App() {
           return
         }
 
-        // Treat non-cancel errors as likely transport errors first (SSE disconnect, proxy, tab sleep).
         runMeta.stream_disconnected = true
         runMeta.error =
           'Connection lost while streaming results. The evaluation may still be running — progress will continue updating via History.'
@@ -169,34 +156,102 @@ export default function App() {
         pollId = null
       }
     })
+  }, [])
+
+  function handleParsed(data) {
+    setParsedFile(data)
+    setStep('configure')
+  }
+
+  function handleLoadScores(results) {
+    setParsedFile(null)
+    setEvalResults(results)
+    setStep('results')
+  }
+
+  async function startRun(req, meta = {}) {
+    const runId = uuid()
+    const runMeta = {
+      id: runId,
+      createdAt: new Date().toISOString(),
+      status: 'running',
+      progress: { done: 0, total: null },
+      ...meta,
+    }
+
+    const run = {
+      meta: runMeta,
+      results: {
+        rows: [],
+        aggregate: {},
+        metrics: meta?.metrics || req?.metrics || [],
+        total: null,
+        meta: runMeta,
+      },
+    }
+    saveRunToHistory(run)
+    setRunningCount(c => c + 1)
+
+    let jobId
+    try {
+      jobId = await startEvaluationJob(req)
+    } catch (e) {
+      setRunningCount(c => Math.max(0, c - 1))
+      runMeta.status = 'error'
+      runMeta.error = e?.response?.data?.detail || e?.message || String(e)
+      saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+      throw e
+    }
+
+    runMeta.job_id = jobId
+    saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+
+    attachRunningJob({ runId, jobId, run, skipRunningCountBump: true })
     return { runId, jobId }
   }
 
   useEffect(() => {
-    // On load, reconcile any "running" runs by asking the backend for latest status.
     const runs = loadHistory()
     const running = runs.filter(r => r?.meta?.status === 'running' && r?.meta?.job_id)
     if (!running.length) return
 
-    running.forEach(async r => {
-      try {
-        const snap = await fetchEvaluationResult(r.meta.job_id)
-        const nextMeta = { ...(r.meta || {}), status: snap.status, progress: snap.progress, error: snap.error, stats: snap.stats }
-        const nextResults = {
-          ...(r.results || {}),
-          rows: snap.rows || r.results?.rows || [],
-          aggregate: snap.aggregate || r.results?.aggregate || {},
-          metrics: snap.metrics || r.results?.metrics || [],
-          total: snap.total ?? r.results?.total,
-          meta: nextMeta,
+    for (const r of running) {
+      const runId = r.id
+      const jobId = r.meta.job_id
+      void (async () => {
+        try {
+          const snap = await fetchEvaluationResult(jobId)
+          const nextMeta = {
+            ...(r.meta || {}),
+            status: snap.status,
+            progress: snap.progress,
+            error: snap.error,
+            stats: snap.stats,
+            metrics: snap.metrics ?? r.meta?.metrics,
+            total: snap.total ?? r.meta?.total,
+          }
+          const nextResults = {
+            ...(r.results || {}),
+            rows: snap.rows || r.results?.rows || [],
+            aggregate: snap.aggregate || r.results?.aggregate || {},
+            metrics: snap.metrics || r.results?.metrics || [],
+            total: snap.total ?? r.results?.total,
+            meta: nextMeta,
+          }
+          saveRunToHistory({ meta: nextMeta, results: nextResults })
+
+          if (snap.status === 'running') {
+            const run = { meta: nextMeta, results: nextResults }
+            run.results.meta = nextMeta
+            attachRunningJob({ runId, jobId, run, skipRunningCountBump: false })
+          }
+        } catch {
+          const nextMeta = { ...(r.meta || {}), status: 'interrupted' }
+          saveRunToHistory({ meta: nextMeta, results: { ...(r.results || {}), meta: nextMeta } })
         }
-        saveRunToHistory({ meta: nextMeta, results: nextResults })
-      } catch {
-        const nextMeta = { ...(r.meta || {}), status: 'interrupted' }
-        saveRunToHistory({ meta: nextMeta, results: { ...(r.results || {}), meta: nextMeta } })
-      }
-    })
-  }, [])
+      })()
+    }
+  }, [attachRunningJob])
 
   function reset() {
     setParsedFile(null)
@@ -209,17 +264,38 @@ export default function App() {
   }
 
   function openRunFromHistory(entry) {
-    setEvalResults(entry.results)
+    const runId = entry?.id
+    const latest = runId ? loadHistory().find(x => x.id === runId) : null
+    const base = latest || entry
+    const runMeta = { ...(base.meta || {}) }
+    const run = {
+      meta: runMeta,
+      results: {
+        ...(base.results || {}),
+        rows: Array.isArray(base.results?.rows) ? [...base.results.rows] : [],
+        meta: runMeta,
+      },
+    }
+    setEvalResults(run.results)
     setStep('results')
+
+    if (runMeta.status === 'running' && runMeta.job_id) {
+      attachRunningJob({ runId, jobId: runMeta.job_id, run, skipRunningCountBump: false })
+    }
   }
 
   function handleHistoryDelete(entry) {
     if (!entry?.id) return
     if (entry?.meta?.status === 'running') {
       const cancel = cancelByRunIdRef.current.get(entry.id)
-      cancel?.()
+      if (cancel) {
+        void cancel()
+      } else {
+        setRunningCount(c => Math.max(0, c - 1))
+        const jid = entry?.meta?.job_id
+        if (jid) attachedJobIdsRef.current.delete(jid)
+      }
       cancelByRunIdRef.current.delete(entry.id)
-      setRunningCount(c => Math.max(0, c - 1))
     }
   }
 

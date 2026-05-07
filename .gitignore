@@ -34,3 +34,6 @@ pip-cache/*.gz
 # Local certs for proxy/SSL inspection (keep folder, ignore contents)
 certs/*
 !certs/.gitkeep
+
+# Symlink to /work/guidelines (shared guidelines folder, not part of this repo)
+.guidelines
