@@ -120,6 +120,14 @@ export async function fetchServerRuns({ project, limit = 50, offset = 0 } = {}) 
   return data?.runs || []
 }
 
+export async function fetchServerRunWithRows(jobId) {
+  const [{ data: snap }, { data: rowsData }] = await Promise.all([
+    api.get(`/runs/${jobId}`),
+    api.get(`/runs/${jobId}/rows`, { params: { limit: 10000 } }),
+  ])
+  return { snap, rows: rowsData.rows || [] }
+}
+
 export async function deleteServerRun(jobId) {
   const { data } = await api.delete(`/runs/${jobId}`)
   return data

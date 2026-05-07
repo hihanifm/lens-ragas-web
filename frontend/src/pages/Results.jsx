@@ -496,7 +496,7 @@ function ExpandableCell({ value, cellKey, expanded, setExpanded, tone = 'normal'
   const textClass = tone === 'dark' ? 'text-gray-800' : 'text-gray-700'
 
   return (
-    <div className={`text-xs ${textClass} whitespace-pre`}>
+    <div className={`text-xs ${textClass} whitespace-pre-wrap`}>
       <div
         style={
           isExpanded

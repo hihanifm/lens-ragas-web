@@ -9,6 +9,7 @@ import Footer from './components/Footer'
 import {
   cancelEvaluationJob,
   fetchEvaluationResult,
+  fetchServerRunWithRows,
   getApiErrorDetail,
   getApiErrorHttpStatus,
   startEvaluationJob,
@@ -36,6 +37,34 @@ export default function App() {
   const cancelByJobIdRef = useRef(new Map()) // jobId -> same cancelFn
   const attachedJobIdsRef = useRef(new Set())
   const [runningCount, setRunningCount] = useState(0)
+
+  // Load run from server if ?run=<job_id> is in the URL on mount.
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get('run')
+    if (!jobId) return
+    fetchServerRunWithRows(jobId)
+      .then(({ snap, rows }) => {
+        const runMeta = { job_id: snap.job_id, status: snap.status, metrics: snap.metrics || [], total: snap.total }
+        setEvalResults({ rows, aggregate: snap.aggregate || {}, metrics: snap.metrics || [], total: snap.total, meta: runMeta })
+        setStep('results')
+      })
+      .catch(() => {
+        const url = new URL(window.location)
+        url.searchParams.delete('run')
+        window.history.replaceState(null, '', url)
+      })
+  }, [])
+
+  // Mirror the current run's job_id in the URL while on the results step.
+  useEffect(() => {
+    const url = new URL(window.location)
+    if (step === 'results' && evalResults?.meta?.job_id) {
+      url.searchParams.set('run', evalResults.meta.job_id)
+    } else {
+      url.searchParams.delete('run')
+    }
+    window.history.replaceState(null, '', url)
+  }, [step, evalResults?.meta?.job_id])
 
   const runningSummary = useMemo(() => {
     if (runningCount <= 0) return null
