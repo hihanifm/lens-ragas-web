@@ -6,9 +6,11 @@ import logging
 import urllib.parse
 import urllib.request
 from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import JSONResponse
 from models import EvalRequest, ParsedFile, ParseMapRequest
 from evaluator import detect_format, load_rows, run_evaluation, read_tabular_rows
 from jobs import start_job, get_job, cancel_job, stream_job_sse
@@ -464,6 +466,59 @@ async def evaluate_cancel(job_id: str):
     print(f"job_cancelled job_id={job_id}", flush=True)
     logger.info("job_cancelled job_id=%s", job_id)
     return {"ok": True}
+
+
+def _summarize_exc_detail(exc: HTTPException) -> str:
+    d = exc.detail
+    try:
+        return json.dumps(jsonable_encoder(d), default=str)[:2000]
+    except Exception:
+        return repr(d)[:2000]
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_logging_handler(request: Request, exc: HTTPException):
+    """
+    Log server / gateway errors at ERROR (not INFO). Uvicorn access logs stay INFO for all status codes.
+    """
+    client = request.client.host if request.client else None
+    if exc.status_code >= 500:
+        logger.error(
+            "HTTP %s %s -> %s client=%s detail=%s",
+            request.method,
+            request.url.path,
+            exc.status_code,
+            client,
+            _summarize_exc_detail(exc),
+        )
+    elif exc.status_code in (502, 503, 504):
+        logger.warning(
+            "HTTP %s %s -> %s client=%s detail=%s",
+            request.method,
+            request.url.path,
+            exc.status_code,
+            client,
+            _summarize_exc_detail(exc),
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": jsonable_encoder(exc.detail)},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_logging_handler(request: Request, exc: Exception):
+    client = request.client.host if request.client else None
+    logger.exception(
+        "Unhandled exception %s %s client=%s",
+        request.method,
+        request.url.path,
+        client,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 app.include_router(api)

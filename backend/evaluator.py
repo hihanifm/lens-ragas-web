@@ -114,6 +114,187 @@ ANSWER_REQUIRED = {"faithfulness", "answer_relevancy"}
 GROUND_TRUTH_REQUIRED = {"context_precision", "context_recall"}
 
 logger = logging.getLogger("lens-ragas-web.evaluator")
+llm_logger = logging.getLogger("lens-ragas-web.llm")
+
+
+def _truncate_for_llm_log(text: str) -> str:
+    n = int(getattr(config, "LLM_LOG_MAX_CHARS", 12000) or 12000)
+    text = text or ""
+    if len(text) <= n:
+        return text
+    return text[:n] + f"\n… [truncated, total_chars={len(text)}]"
+
+
+def _message_content_piece(msg) -> str:
+    c = getattr(msg, "content", msg)
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        parts = []
+        for block in c:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text") or "")
+            elif isinstance(block, dict):
+                parts.append(json.dumps(block, default=str)[:2000])
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+    return str(c)
+
+
+def _format_invoke_args(args: tuple, kwargs: dict) -> str:
+    max_c = getattr(config, "LLM_LOG_MAX_CHARS", 12000)
+    # Drop heavy / noisy LangChain internals from kwargs copy.
+    raw_kw = {k: v for k, v in kwargs.items() if k not in ("callbacks",)}
+    preview = ""
+    if args:
+        a0 = args[0]
+        if isinstance(a0, dict):
+            if "messages" in a0 and isinstance(a0["messages"], list):
+                bits = []
+                for m in a0["messages"]:
+                    role = type(m).__name__
+                    bits.append(f"[{role}]\n{_message_content_piece(m)}")
+                preview = "\n---\n".join(bits)
+            else:
+                try:
+                    preview = json.dumps(a0, default=str)
+                except TypeError:
+                    preview = str(a0)
+        elif isinstance(a0, list):
+            bits = [f"[{type(m).__name__}]\n{_message_content_piece(m)}" for m in a0]
+            preview = "\n---\n".join(bits)
+        else:
+            preview = str(a0)
+        if len(args) > 1:
+            preview += "\n...[extra_invoke_args="
+            preview += str(len(args) - 1)
+            preview += "]"
+    if raw_kw:
+        preview += "\n(kwargs keys: " + ",".join(sorted(raw_kw.keys())) + ")"
+    return _truncate_for_llm_log(preview[: max_c + 400])
+
+
+def _format_generation_output(gen_out, max_chars: int = 12000) -> str:
+    try:
+        gens = getattr(gen_out, "generations", None)
+        if gens:
+            chunks = []
+            for bi, block in enumerate(gens):
+                if not block:
+                    continue
+                texts = []
+                for g in block:
+                    txt = getattr(g, "text", None)
+                    if txt is not None:
+                        texts.append(txt)
+                    else:
+                        texts.append(str(g))
+                chunks.append(f"[batch_prompt {bi}]\n" + "\n".join(texts))
+            return _truncate_for_llm_log("\n\n".join(chunks)[:max_chars + 400])
+    except Exception:
+        pass
+    return _truncate_for_llm_log(str(gen_out))
+
+
+def _format_chat_result_output(out, max_chars: int = 12000) -> str:
+    if hasattr(out, "content"):
+        body = _message_content_piece(out)
+        return _truncate_for_llm_log(body[: max_chars + 400])
+    return _truncate_for_llm_log(_format_generation_output(out, max_chars=max_chars))
+
+
+def _job_ctx_line(req) -> str:
+    prov = getattr(req, "llm_provider", "?")
+    mid = getattr(req, "job_id", None)
+    model = (
+        getattr(req, "openai_model", None)
+        if prov == "openai"
+        else getattr(req, "ollama_model", None)
+    ) or "?"
+    return f"job_id={mid} provider={prov} model={model}"
+
+
+def _log_llm(phase: str, req, body: str) -> None:
+    if not getattr(config, "LLM_DETAIL_LOG", False):
+        return
+    llm_logger.info("%s %s\n%s", phase, _job_ctx_line(req), body)
+
+
+class _CountingLLMProxy:
+    """Wrap LangChain chat model: usage accounting + optional detailed I/O logs."""
+
+    __slots__ = ("_inner", "_req", "_track_tokens")
+
+    def __init__(self, inner, req, *, track_tokens: bool):
+        self._inner = inner
+        self._req = req
+        self._track_tokens = track_tokens
+
+    def invoke(self, *args, **kwargs):
+        _log_llm("llm.invoke_in", self._req, _format_invoke_args(args, kwargs))
+        out = self._inner.invoke(*args, **kwargs)
+        _log_llm("llm.invoke_out", self._req, _format_chat_result_output(out))
+        pt, ct = (None, None)
+        if self._track_tokens:
+            pt, ct = _extract_usage_from_result(out)
+        _maybe_record_llm_usage(self._req, pt, ct, calls=1)
+        return out
+
+    async def ainvoke(self, *args, **kwargs):
+        _log_llm("llm.ainvoke_in", self._req, _format_invoke_args(args, kwargs))
+        out = await self._inner.ainvoke(*args, **kwargs)
+        _log_llm("llm.ainvoke_out", self._req, _format_chat_result_output(out))
+        pt, ct = (None, None)
+        if self._track_tokens:
+            pt, ct = _extract_usage_from_result(out)
+        _maybe_record_llm_usage(self._req, pt, ct, calls=1)
+        return out
+
+    def generate(self, messages, *args, **kwargs):
+        _log_llm("llm.generate_in", self._req, _format_generate_messages(messages))
+        out = self._inner.generate(messages, *args, **kwargs)
+        _log_llm("llm.generate_out", self._req, _format_generation_output(out))
+        pt, ct = (
+            _extract_usage_from_result(out)
+            if self._track_tokens
+            else (None, None)
+        )
+        calls = len(messages) if isinstance(messages, list) else 1
+        _maybe_record_llm_usage(self._req, pt, ct, calls=calls)
+        return out
+
+    async def agenerate(self, messages, *args, **kwargs):
+        _log_llm("llm.agenerate_in", self._req, _format_generate_messages(messages))
+        out = await self._inner.agenerate(messages, *args, **kwargs)
+        _log_llm("llm.agenerate_out", self._req, _format_generation_output(out))
+        pt, ct = (
+            _extract_usage_from_result(out)
+            if self._track_tokens
+            else (None, None)
+        )
+        calls = len(messages) if isinstance(messages, list) else 1
+        _maybe_record_llm_usage(self._req, pt, ct, calls=calls)
+        return out
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+def _format_generate_messages(messages) -> str:
+    max_c = getattr(config, "LLM_LOG_MAX_CHARS", 12000)
+    if not isinstance(messages, list):
+        return _truncate_for_llm_log(str(messages)[: max_c + 400])
+    parts = []
+    for i, seq in enumerate(messages):
+        if isinstance(seq, list):
+            bits = []
+            for m in seq:
+                bits.append(f"{type(m).__name__}:{_truncate_for_llm_log(_message_content_piece(m))}")
+            parts.append(f"[prompt_set {i}]\n" + "\n".join(bits))
+        else:
+            parts.append(f"[prompt_set {i}]\n{_truncate_for_llm_log(str(seq))}")
+    return _truncate_for_llm_log("\n\n".join(parts)[: max_c + 400])
 
 
 def detect_format(columns: list[str]) -> tuple[str, list[str]]:
@@ -201,91 +382,29 @@ def load_rows(filepath: str, *, column_map: Optional[dict[str, str]] = None) -> 
 def build_llm(req):
     if req.llm_provider == "openai":
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-        import asyncio
-
-        class _CountingLLM:
-            def __init__(self, inner):
-                self._inner = inner
-
-            def invoke(self, *args, **kwargs):
-                out = self._inner.invoke(*args, **kwargs)
-                pt, ct = _extract_usage_from_result(out)
-                _maybe_record_llm_usage(req, pt, ct, calls=1)
-                return out
-
-            async def ainvoke(self, *args, **kwargs):
-                out = await self._inner.ainvoke(*args, **kwargs)
-                pt, ct = _extract_usage_from_result(out)
-                _maybe_record_llm_usage(req, pt, ct, calls=1)
-                return out
-
-            def generate(self, messages, *args, **kwargs):
-                out = self._inner.generate(messages, *args, **kwargs)
-                pt, ct = _extract_usage_from_result(out)
-                calls = len(messages) if isinstance(messages, list) else 1
-                _maybe_record_llm_usage(req, pt, ct, calls=calls)
-                return out
-
-            async def agenerate(self, messages, *args, **kwargs):
-                out = await self._inner.agenerate(messages, *args, **kwargs)
-                pt, ct = _extract_usage_from_result(out)
-                calls = len(messages) if isinstance(messages, list) else 1
-                _maybe_record_llm_usage(req, pt, ct, calls=calls)
-                return out
-
-            def __getattr__(self, name):
-                return getattr(self._inner, name)
 
         logger.info("llm_provider=openai model=%s", req.openai_model or "gpt-4o-mini")
         base_llm = ChatOpenAI(
             model=req.openai_model or "gpt-4o-mini",
             api_key=req.openai_api_key,
         )
-        lc_llm = _CountingLLM(base_llm)
+        lc_llm = _CountingLLMProxy(base_llm, req, track_tokens=True)
         lc_emb = OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=req.openai_api_key,
         )
         return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
-    else:
-        from langchain_ollama import ChatOllama, OllamaEmbeddings
-        class _CountingLLM:
-            def __init__(self, inner):
-                self._inner = inner
 
-            def invoke(self, *args, **kwargs):
-                out = self._inner.invoke(*args, **kwargs)
-                _maybe_record_llm_usage(req, None, None, calls=1)
-                return out
+    from langchain_ollama import ChatOllama, OllamaEmbeddings
 
-            async def ainvoke(self, *args, **kwargs):
-                out = await self._inner.ainvoke(*args, **kwargs)
-                _maybe_record_llm_usage(req, None, None, calls=1)
-                return out
+    base_url = normalize_ollama_base_url(req.ollama_base_url or "http://localhost:11434")
+    model = req.ollama_model or "llama3.2"
 
-            def generate(self, messages, *args, **kwargs):
-                out = self._inner.generate(messages, *args, **kwargs)
-                calls = len(messages) if isinstance(messages, list) else 1
-                _maybe_record_llm_usage(req, None, None, calls=calls)
-                return out
-
-            async def agenerate(self, messages, *args, **kwargs):
-                out = await self._inner.agenerate(messages, *args, **kwargs)
-                calls = len(messages) if isinstance(messages, list) else 1
-                _maybe_record_llm_usage(req, None, None, calls=calls)
-                return out
-
-            def __getattr__(self, name):
-                return getattr(self._inner, name)
-
-        base_url = normalize_ollama_base_url(req.ollama_base_url or "http://localhost:11434")
-        model = req.ollama_model or "llama3.2"
-
-        logger.info("llm_provider=ollama base_url=%s model=%s", base_url, model)
-        base_llm = ChatOllama(model=model, base_url=base_url)
-        lc_llm = _CountingLLM(base_llm)
-        lc_emb = OllamaEmbeddings(model=model, base_url=base_url)
-        return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
+    logger.info("llm_provider=ollama base_url=%s model=%s", base_url, model)
+    base_llm = ChatOllama(model=model, base_url=base_url)
+    lc_llm = _CountingLLMProxy(base_llm, req, track_tokens=False)
+    lc_emb = OllamaEmbeddings(model=model, base_url=base_url)
+    return LangchainLLMWrapper(lc_llm), LangchainEmbeddingsWrapper(lc_emb)
 
 
 async def run_evaluation(

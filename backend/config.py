@@ -17,6 +17,10 @@ OPENAI_USD_PER_1K_OUTPUT_TOKENS = float(os.getenv("OPENAI_USD_PER_1K_OUTPUT_TOKE
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# When true, logs every judge LLM call with prompts/responses (truncated) to lens-ragas-web.llm at INFO.
+LLM_DETAIL_LOG = os.getenv("LLM_DETAIL_LOG", "").strip().lower() in ("1", "true", "yes", "on")
+LLM_LOG_MAX_CHARS = max(500, int(os.getenv("LLM_LOG_MAX_CHARS", "12000")))
+
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
