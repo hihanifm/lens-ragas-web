@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadHistory } from '../utils/history'
+import { downloadScoredXlsx } from '../api/client'
 
 const METRIC_LABELS = {
   faithfulness: 'Faithfulness',
@@ -51,6 +52,9 @@ export default function Results({ results, onReset }) {
   const completionTokens = stats?.completion_tokens
   const totalTokens = stats?.total_tokens
   const costUsd = stats?.cost_usd
+
+  const jobId = meta?.job_id
+  const isXlsx = typeof meta?.input_filename === 'string' && meta.input_filename.toLowerCase().endsWith('.xlsx')
 
   function getGroundTruth(row) {
     return row?.ground_truth ?? row?.reference ?? null
@@ -107,6 +111,17 @@ export default function Results({ results, onReset }) {
     const a = document.createElement('a')
     a.href = url
     a.download = buildExportFilename(meta?.input_filename)
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function exportScoredXlsx() {
+    if (!jobId) return
+    const { blob, filename } = await downloadScoredXlsx(jobId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -368,6 +383,16 @@ export default function Results({ results, onReset }) {
           className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
           Start Over
         </button>
+        {isXlsx && jobId && (
+          <button
+            onClick={() => void exportScoredXlsx()}
+            disabled={isRunning}
+            title={isRunning ? 'Wait until the run finishes for a complete export' : undefined}
+            className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Download scored Excel
+          </button>
+        )}
         <button onClick={exportCsv}
           disabled={isRunning}
           title={isRunning ? 'Wait until the run finishes for a complete export' : undefined}

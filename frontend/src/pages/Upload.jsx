@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { parseFile } from '../api/client'
+import { useMemo, useRef, useState } from 'react'
+import { applyParseColumnMap, parseFile } from '../api/client'
 import { parseExportedScoresCsv } from '../utils/scoresCsv'
 const SAMPLE_FILENAME = 'sample-dataset.json'
 const SAMPLE_SCORES_FILENAME = 'sample-scores.csv'
@@ -70,6 +70,7 @@ function parseCsv(text) {
 async function buildPreview(file) {
   if (!file) return null
   const name = String(file.name || '').toLowerCase()
+  if (name.endsWith('.xlsx')) return null
   const text = await file.text()
 
   if (name.endsWith('.json')) {
@@ -118,7 +119,15 @@ export default function Upload({ onParsed, onLoadScores }) {
   const [error, setError] = useState(null)
   const [preview, setPreview] = useState(null) // { columns: string[], rows: object[] }
   const [parsedReady, setParsedReady] = useState(null) // parsedFile payload to pass to Configure
+  const [mapping, setMapping] = useState(null) // { file_id, columns, column_map }
   const [project, setProject] = useState(() => localStorage.getItem('lens-ragas-web:project:v1') || '')
+
+  const mappingColumns = mapping?.columns || []
+  const mappingReady = useMemo(() => {
+    if (!mapping) return false
+    const cm = mapping.column_map || {}
+    return Boolean(cm.question && cm.contexts)
+  }, [mapping])
 
   async function handleFile(file) {
     if (!file) return
@@ -126,6 +135,7 @@ export default function Upload({ onParsed, onLoadScores }) {
     setLoading(true)
     setPreview(null)
     setParsedReady(null)
+    setMapping(null)
     try {
       // Client-side preview (top 5 rows) so the user can sanity-check the file.
       try {
@@ -135,7 +145,17 @@ export default function Upload({ onParsed, onLoadScores }) {
         setPreview(null)
       }
       const data = await parseFile(file)
-      setParsedReady({ ...data, input_filename: file.name })
+      const withName = { ...data, input_filename: file.name }
+      if (withName?.needs_column_mapping) {
+        setMapping({
+          file_id: withName.file_id,
+          columns: withName.columns || [],
+          column_map: { question: '', contexts: '', ground_truth: '', answer: '' },
+          input_filename: file.name,
+        })
+      } else {
+        setParsedReady(withName)
+      }
     } catch (e) {
       setError(e.response?.data?.detail || e.message)
     } finally {
@@ -201,8 +221,9 @@ export default function Upload({ onParsed, onLoadScores }) {
     <div className="bg-white rounded-xl border border-gray-200 p-8">
       <h2 className="text-lg font-semibold text-gray-900 mb-1">Upload evaluation file</h2>
       <p className="text-sm text-gray-500 mb-6">
-        Accepts <code className="bg-gray-100 px-1 rounded">.json</code> (LENS export) or{' '}
-        <code className="bg-gray-100 px-1 rounded">.csv</code> with columns:{' '}
+        Accepts <code className="bg-gray-100 px-1 rounded">.json</code> (LENS export),{' '}
+        <code className="bg-gray-100 px-1 rounded">.csv</code>, or{' '}
+        <code className="bg-gray-100 px-1 rounded">.xlsx</code> with columns:{' '}
         <code className="bg-gray-100 px-1 rounded">question</code>,{' '}
         <code className="bg-gray-100 px-1 rounded">contexts</code>,{' '}
         <code className="bg-gray-100 px-1 rounded">ground_truth</code>,{' '}
@@ -245,7 +266,7 @@ export default function Upload({ onParsed, onLoadScores }) {
         ) : (
           <>
             <p className="text-gray-700 font-medium">Drop file here or click to browse</p>
-            <p className="text-sm text-gray-400 mt-1">.json or .csv</p>
+            <p className="text-sm text-gray-400 mt-1">.json, .csv, or .xlsx</p>
             <p className="text-sm text-gray-400 mt-3">
               or{' '}
               <button
@@ -260,6 +281,76 @@ export default function Upload({ onParsed, onLoadScores }) {
           </>
         )}
       </div>
+
+      {mapping && !loading && !error && (
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <div className="text-sm text-amber-900">
+            <span className="font-medium">Column names don’t match.</span>{' '}
+            Choose which columns contain the required fields.
+          </div>
+          <p className="text-xs text-amber-800/90 mt-1">
+            For <span className="font-medium">contexts</span>, pick the column that contains the retrieved passages (often a JSON list like
+            <code className="mx-1 bg-white/60 px-1 rounded">[\"ctx1\",\"ctx2\"]</code>).
+          </p>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="question (required)"
+              value={mapping.column_map.question}
+              options={mappingColumns}
+              onChange={v => setMapping(m => ({ ...m, column_map: { ...(m.column_map || {}), question: v } }))}
+            />
+            <Select
+              label="contexts (required)"
+              value={mapping.column_map.contexts}
+              options={mappingColumns}
+              onChange={v => setMapping(m => ({ ...m, column_map: { ...(m.column_map || {}), contexts: v } }))}
+            />
+            <Select
+              label="ground_truth (optional)"
+              allowNone
+              value={mapping.column_map.ground_truth}
+              options={mappingColumns}
+              onChange={v => setMapping(m => ({ ...m, column_map: { ...(m.column_map || {}), ground_truth: v } }))}
+            />
+            <Select
+              label="answer (optional)"
+              allowNone
+              value={mapping.column_map.answer}
+              options={mappingColumns}
+              onChange={v => setMapping(m => ({ ...m, column_map: { ...(m.column_map || {}), answer: v } }))}
+            />
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="text-xs text-amber-800/80">
+              File: <span className="font-mono">{mapping?.input_filename}</span>
+            </div>
+            <button
+              type="button"
+              disabled={!mappingReady || loading}
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const cm = { ...(mapping.column_map || {}) }
+                  if (!cm.ground_truth) delete cm.ground_truth
+                  if (!cm.answer) delete cm.answer
+                  const parsed = await applyParseColumnMap({ file_id: mapping.file_id, column_map: cm })
+                  setParsedReady({ ...parsed, input_filename: mapping.input_filename })
+                  setMapping(null)
+                } catch (e) {
+                  setError(e?.response?.data?.detail || e?.message || String(e))
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
 
       {parsedReady && !loading && !error && (
         <div className="mt-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
@@ -282,7 +373,7 @@ export default function Upload({ onParsed, onLoadScores }) {
       <input
         ref={inputRef}
         type="file"
-        accept=".json,.csv"
+        accept=".json,.csv,.xlsx"
         className="hidden"
         data-testid="upload-input"
         onChange={e => handleFile(e.target.files[0])}
@@ -378,6 +469,26 @@ export default function Upload({ onParsed, onLoadScores }) {
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function Select({ label, value, options, onChange, allowNone }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-amber-900/90 mb-1">{label}</label>
+      <select
+        value={value || ''}
+        onChange={e => onChange?.(e.target.value)}
+        className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+      >
+        <option value="">{allowNone ? 'None' : 'Select…'}</option>
+        {(options || []).map(o => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

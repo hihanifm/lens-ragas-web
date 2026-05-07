@@ -16,6 +16,11 @@ export async function parseFile(file) {
   return data
 }
 
+export async function applyParseColumnMap({ file_id, column_map }) {
+  const { data } = await api.post('/parse/map', { file_id, column_map })
+  return data
+}
+
 export async function fetchOllamaModels(baseUrl) {
   const { data } = await api.get('/ollama/models', { params: { base_url: baseUrl } })
   return data?.models || []
@@ -53,6 +58,19 @@ export async function fetchServerRuns({ project, limit = 50, offset = 0 } = {}) 
 export async function deleteServerRun(jobId) {
   const { data } = await api.delete(`/runs/${jobId}`)
   return data
+}
+
+export async function downloadScoredXlsx(jobId) {
+  const res = await fetch(`${API_BASE}/export/scored-xlsx/${jobId}`, { method: 'GET' })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to download scored workbook')
+  }
+  const blob = await res.blob()
+  const cd = res.headers.get('content-disposition') || ''
+  const m = /filename=\"?([^\";]+)\"?/i.exec(cd)
+  const filename = m?.[1] || `scored-${jobId}.xlsx`
+  return { blob, filename }
 }
 
 export function streamEvaluationJob(jobId, { onStart, onRow, onComplete, onError }) {

@@ -137,24 +137,65 @@ def detect_format(columns: list[str]) -> tuple[str, list[str]]:
     return fmt, available
 
 
-def load_rows(filepath: str) -> list[dict]:
+def _normalize_contexts_cell(v):
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        try:
+            parsed = json.loads(s)
+            return parsed if isinstance(parsed, list) else [parsed]
+        except Exception:
+            return [v]
+    return [str(v)]
+
+
+def _apply_column_map(row: dict, column_map: Optional[dict[str, str]]) -> dict:
+    """
+    Produce a canonical row with keys: question, contexts, ground_truth, answer (optional).
+    column_map shape: canonical_key -> source_column_name
+    """
+    if not column_map:
+        return row
+
+    out: dict = {}
+    for canon in ("question", "contexts", "ground_truth", "answer"):
+        src = column_map.get(canon)
+        if not src:
+            continue
+        out[canon] = row.get(src)
+    return out
+
+
+def read_tabular_rows(filepath: str, *, column_map: Optional[dict[str, str]] = None) -> list[dict]:
+    if filepath.endswith(".csv"):
+        df = pd.read_csv(filepath, dtype=str)
+    elif filepath.endswith(".xlsx"):
+        df = pd.read_excel(filepath, dtype=str)  # first sheet
+    else:
+        raise ValueError("Unsupported tabular file type.")
+
+    rows: list[dict] = []
+    for _, row in df.iterrows():
+        r = row.to_dict()
+        r = _apply_column_map(r, column_map)
+        if "contexts" in r:
+            r["contexts"] = _normalize_contexts_cell(r.get("contexts"))
+        rows.append(r)
+    return rows
+
+
+def load_rows(filepath: str, *, column_map: Optional[dict[str, str]] = None) -> list[dict]:
     if filepath.endswith(".json"):
         with open(filepath) as f:
             data = json.load(f)
         return data if isinstance(data, list) else data.get("results", [])
 
-    df = pd.read_csv(filepath, dtype=str)
-    rows = []
-    for _, row in df.iterrows():
-        r = row.to_dict()
-        # contexts column may be a JSON string like '["ctx1","ctx2"]'
-        if "contexts" in r and isinstance(r["contexts"], str):
-            try:
-                r["contexts"] = json.loads(r["contexts"])
-            except Exception:
-                r["contexts"] = [r["contexts"]]
-        rows.append(r)
-    return rows
+    return read_tabular_rows(filepath, column_map=column_map)
 
 
 def build_llm(req):
@@ -254,7 +295,7 @@ async def run_evaluation(
     is_disconnected: Optional[Callable[[], Awaitable[bool]]] = None,
     batch_size: int = 1,
 ) -> AsyncGenerator[str, None]:
-    rows = load_rows(filepath)
+    rows = load_rows(filepath, column_map=getattr(req, "column_map", None))
     if not rows:
         raise ValueError("No rows found in file.")
 

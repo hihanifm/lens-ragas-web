@@ -151,6 +151,8 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       metrics: selectedMetrics,
       llm_provider: provider,
       project: projectValue || undefined,
+      column_map: parsedFile?.column_map || undefined,
+      input_filename: parsedFile?.input_filename || undefined,
       ollama_base_url: ollamaUrl,
       ollama_model: ollamaModel,
       openai_api_key: openaiKey || undefined,

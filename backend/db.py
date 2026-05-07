@@ -400,6 +400,8 @@ def get_run_snapshot(db_path: str, *, job_id: str) -> Optional[dict[str, Any]]:
             "created_at": r["created_at"],
             "status": r["status"],
             "error": r["error"],
+            "file_id": r["file_id"],
+            "input_filename": r["input_filename"],
             "progress": progress,
             "metrics": metrics,
             "rows": out_rows,
