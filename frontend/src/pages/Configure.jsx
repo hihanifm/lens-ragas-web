@@ -296,10 +296,14 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
                 </div>
               ) : ollamaModels.length ? (
                 <select
+                  data-testid="configure-ollama-model-select"
                   value={ollamaModels.includes(ollamaModel) ? ollamaModel : '__custom__'}
                   onChange={e => {
                     const v = e.target.value
-                    if (v === '__custom__') return
+                    if (v === '__custom__') {
+                      setOllamaModel('')
+                      return
+                    }
                     setOllamaModel(v)
                   }}
                   className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -312,14 +316,26 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
                   <option value="__custom__">Custom…</option>
                 </select>
               ) : (
-                <Field label="Model" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3.2" />
+                <Field
+                  label="Model"
+                  value={ollamaModel}
+                  onChange={setOllamaModel}
+                  placeholder="llama3.2"
+                  inputTestId="configure-ollama-model-input"
+                />
               )}
               {ollamaModelsStatus.error && (
                 <div className="mt-1 text-xs text-amber-700">Couldn’t load models: {ollamaModelsStatus.error}</div>
               )}
               {!ollamaModelsStatus.loading && ollamaModels.length && !ollamaModels.includes(ollamaModel) && (
                 <div className="mt-2">
-                  <Field label="Custom model" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3.2" />
+                  <Field
+                    label="Custom model"
+                    value={ollamaModel}
+                    onChange={setOllamaModel}
+                    placeholder="llama3.2"
+                    inputTestId="configure-ollama-model-custom"
+                  />
                 </div>
               )}
             </div>
@@ -459,7 +475,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
   )
 }
 
-function Field({ label, value, onChange, placeholder, type = 'text' }) {
+function Field({ label, value, onChange, placeholder, type = 'text', inputTestId }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
@@ -468,6 +484,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
+        data-testid={inputTestId}
         className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
