@@ -9,7 +9,7 @@ const METRIC_LABELS = {
   context_recall: 'Context Recall',
 }
 
-export default function History({ onOpenRun, onBack, onDeleteRun }) {
+export default function History({ onOpenRun, onBack, onDeleteRun, onCancelRunningJob }) {
   const [mode, setMode] = useState('local') // local | server
   const [runs, setRuns] = useState([])
   const [serverRuns, setServerRuns] = useState([])
@@ -75,11 +75,11 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
     const status = entry?.meta?.status
     const jobId = entry?.meta?.job_id
 
-    if (status === 'running' && jobId) {
+    if (status === 'running' && jobId && onCancelRunningJob) {
       try {
-        await cancelEvaluationJob(jobId)
+        await onCancelRunningJob(jobId)
       } catch {
-        // still remove from local history; backend may be unreachable
+        // Still remove locally; cancellation may fail if offline.
       }
     }
     onDeleteRun?.(entry)
@@ -195,6 +195,7 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
                   const progress = isServer ? run?.progress : run?.meta?.progress
                   const provider = isServer ? run?.provider : (run?.meta?.llm_provider || run?.meta?.provider)
                   const model = isServer ? run?.model : (run?.meta?.ollama_model || run?.meta?.openai_model || run?.meta?.model)
+                  const localJobId = !isServer ? run?.meta?.job_id : null
                   return (
                     <tr key={isServer ? run.job_id : run.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
@@ -234,6 +235,15 @@ export default function History({ onOpenRun, onBack, onDeleteRun }) {
                           >
                             Open
                           </button>
+                          {!isServer && status === 'running' && localJobId && onCancelRunningJob && (
+                            <button
+                              type="button"
+                              onClick={() => void onCancelRunningJob(localJobId)}
+                              className="px-3 py-1.5 text-sm font-medium bg-amber-50 border border-amber-300 rounded-lg text-amber-900 shadow-sm hover:bg-amber-100"
+                            >
+                              Cancel
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               if (isServer) return void handleDeleteServer(run)

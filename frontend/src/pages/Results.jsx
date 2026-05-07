@@ -9,7 +9,7 @@ const METRIC_LABELS = {
   context_recall: 'Context Recall',
 }
 
-export default function Results({ results, onReset }) {
+export default function Results({ results, onReset, onCancelRunningJob }) {
   const [current, setCurrent] = useState(results)
   const [expanded, setExpanded] = useState(() => new Set())
   const [activePane, setActivePane] = useState('results') // results | stats
@@ -137,8 +137,19 @@ export default function Results({ results, onReset }) {
             className="mt-0.5 inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse shrink-0"
             aria-hidden
           />
-          <div>
-            <p className="font-medium">Evaluation in progress</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="font-medium">Evaluation in progress</p>
+              {jobId && onCancelRunningJob ? (
+                <button
+                  type="button"
+                  onClick={() => void onCancelRunningJob(jobId)}
+                  className="shrink-0 px-3 py-1.5 text-xs font-medium bg-white border border-blue-300 rounded-lg text-blue-900 hover:bg-blue-100"
+                >
+                  Cancel run
+                </button>
+              ) : null}
+            </div>
             <p className="text-blue-800/90 mt-0.5">
               Scoring rows as they complete: {rows.length}
               {expectedTotal != null ? ` / ${expectedTotal}` : ''}
@@ -152,6 +163,16 @@ export default function Results({ results, onReset }) {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {status === 'error' && meta?.error && (
+        <div
+          className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800"
+          data-testid="results-error-banner"
+        >
+          <p className="font-medium text-red-900">Evaluation failed</p>
+          <p className="mt-1 whitespace-pre-wrap break-words">{String(meta.error)}</p>
         </div>
       )}
 

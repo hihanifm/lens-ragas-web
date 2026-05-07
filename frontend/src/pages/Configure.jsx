@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { fetchConfig, fetchOllamaModels, fetchOpenAIModels } from '../api/client'
+import { fetchConfig, fetchOllamaModels, fetchOpenAIModels, getApiErrorDetail } from '../api/client'
 import { loadHistory } from '../utils/history'
 
 const METRIC_LABELS = {
@@ -16,7 +16,7 @@ const METRIC_DESC = {
   context_recall: 'Did retrieval cover what was needed? (needs ground_truth)',
 }
 
-export default function Configure({ parsedFile, onStartRun, onOpenResults, onBack }) {
+export default function Configure({ parsedFile, onStartRun, onOpenResults, onBack, onCancelRunningJob }) {
   const [provider, setProvider] = useState('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
 
@@ -176,7 +176,7 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       const out = await onStartRun?.(req, meta)
       if (out?.runId) setActiveRunId(out.runId)
     } catch (e) {
-      setError(e?.response?.data?.detail || e.message || String(e))
+      setError(getApiErrorDetail(e))
     } finally {
       setStarting(false)
     }
@@ -374,20 +374,33 @@ export default function Configure({ parsedFile, onStartRun, onOpenResults, onBac
       {/* Progress / error */}
       {showRunBanner && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
-          <p className="font-medium">Evaluation running in the background</p>
-          <p className="text-blue-800/90 mt-1">
-            Progress: {activeRun?.meta?.progress?.done ?? 0}
-            {activeRun?.meta?.progress?.total != null
-              ? ` / ${activeRun.meta.progress.total}`
-              : ''}
-            {' · '}
-            Open <span className="font-medium">History</span> anytime for details.
-          </p>
-          {activeRun?.meta?.stream_disconnected && (
-            <p className="text-xs text-amber-800 mt-2">
-              Lost the live stream connection. The job can still be running; this page will keep updating from History.
-            </p>
-          )}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Evaluation running in the background</p>
+              <p className="text-blue-800/90 mt-1">
+                Progress: {activeRun?.meta?.progress?.done ?? 0}
+                {activeRun?.meta?.progress?.total != null
+                  ? ` / ${activeRun.meta.progress.total}`
+                  : ''}
+                {' · '}
+                Open <span className="font-medium">History</span> anytime for details.
+              </p>
+              {activeRun?.meta?.stream_disconnected && (
+                <p className="text-xs text-amber-800 mt-2">
+                  Lost the live stream connection. The job can still be running; this page will keep updating from History.
+                </p>
+              )}
+            </div>
+            {activeRun?.meta?.job_id && onCancelRunningJob ? (
+              <button
+                type="button"
+                onClick={() => void onCancelRunningJob(activeRun.meta.job_id)}
+                className="shrink-0 px-3 py-1.5 text-xs font-medium bg-white border border-blue-300 rounded-lg text-blue-900 hover:bg-blue-100"
+              >
+                Cancel run
+              </button>
+            ) : null}
+          </div>
         </div>
       )}
       {error && (

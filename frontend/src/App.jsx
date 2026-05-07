@@ -6,7 +6,14 @@ import History from './pages/History'
 import { loadHistory, saveRunToHistory } from './utils/history'
 import { uuid } from './utils/uuid'
 import Footer from './components/Footer'
-import { cancelEvaluationJob, fetchEvaluationResult, startEvaluationJob, streamEvaluationJob } from './api/client'
+import {
+  cancelEvaluationJob,
+  fetchEvaluationResult,
+  getApiErrorDetail,
+  getApiErrorHttpStatus,
+  startEvaluationJob,
+  streamEvaluationJob,
+} from './api/client'
 
 /** Insert or replace by SSE `row.index` so stream replay cannot duplicate rows. */
 function upsertEvalRow(rows, row) {
@@ -26,6 +33,7 @@ export default function App() {
   const [parsedFile, setParsedFile] = useState(null)
   const [evalResults, setEvalResults] = useState(null)
   const cancelByRunIdRef = useRef(new Map()) // runId -> cancelFn
+  const cancelByJobIdRef = useRef(new Map()) // jobId -> same cancelFn
   const attachedJobIdsRef = useRef(new Set())
   const [runningCount, setRunningCount] = useState(0)
 
@@ -53,6 +61,7 @@ export default function App() {
       attachedJobIdsRef.current.delete(jobId)
       setRunningCount(c => Math.max(0, c - 1))
       cancelByRunIdRef.current.delete(runId)
+      cancelByJobIdRef.current.delete(jobId)
       if (pollId) {
         clearInterval(pollId)
         pollId = null
@@ -81,8 +90,12 @@ export default function App() {
           if (snap.status && snap.status !== 'running') {
             finalizeOnce()
           }
-        } catch {
-          // If polling fails intermittently, keep the run in "running" state and try again.
+        } catch (e) {
+          runMeta.status = 'error'
+          runMeta.stream_disconnected = false
+          runMeta.error = getApiErrorDetail(e)
+          saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+          finalizeOnce()
         }
       }
       void tick()
@@ -138,13 +151,16 @@ export default function App() {
 
         runMeta.stream_disconnected = true
         runMeta.error =
-          'Connection lost while streaming results. The evaluation may still be running — progress will continue updating via History.'
+          typeof msg === 'string' && msg.trim()
+            ? msg.trim()
+            : 'Connection lost while streaming results. Retrying via server polling…'
         saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
         pollResultUntilDone()
       },
     })
 
-    cancelByRunIdRef.current.set(runId, async () => {
+    const cancelFn = async () => {
+      if (finalized) return
       try {
         await cancelEvaluationJob(jobId)
       } catch {
@@ -155,8 +171,56 @@ export default function App() {
         clearInterval(pollId)
         pollId = null
       }
-    })
+      runMeta.status = 'cancelled'
+      runMeta.error = 'cancelled'
+      runMeta.stream_disconnected = false
+      saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
+      finalizeOnce()
+    }
+    cancelByRunIdRef.current.set(runId, cancelFn)
+    cancelByJobIdRef.current.set(jobId, cancelFn)
   }, [])
+
+  const cancelEvaluationByJobId = useCallback(async jobId => {
+    if (!jobId) return
+    const fn = cancelByJobIdRef.current.get(jobId)
+    if (fn) {
+      await fn()
+      return
+    }
+    try {
+      await cancelEvaluationJob(jobId)
+    } catch {
+      /* ignore */
+    }
+
+    let anyLocal = false
+    const runs = loadHistory()
+    for (const entry of runs) {
+      if (entry.meta?.job_id !== jobId || entry.meta?.status !== 'running') continue
+      anyLocal = true
+      const nextMeta = { ...(entry.meta || {}), status: 'cancelled', error: 'cancelled' }
+      saveRunToHistory({
+        meta: nextMeta,
+        results: { ...(entry.results || {}), meta: nextMeta },
+      })
+      cancelByRunIdRef.current.delete(entry.id)
+    }
+    attachedJobIdsRef.current.delete(jobId)
+    cancelByJobIdRef.current.delete(jobId)
+    if (anyLocal) setRunningCount(c => Math.max(0, c - 1))
+  }, [])
+
+  const cancelAllRunningEvaluations = useCallback(async () => {
+    const jobIds = [
+      ...new Set(
+        loadHistory()
+          .filter(r => r?.meta?.status === 'running' && r?.meta?.job_id)
+          .map(r => r.meta.job_id),
+      ),
+    ]
+    for (const id of jobIds) await cancelEvaluationByJobId(id)
+  }, [cancelEvaluationByJobId])
 
   function handleParsed(data) {
     setParsedFile(data)
@@ -198,7 +262,7 @@ export default function App() {
     } catch (e) {
       setRunningCount(c => Math.max(0, c - 1))
       runMeta.status = 'error'
-      runMeta.error = e?.response?.data?.detail || e?.message || String(e)
+      runMeta.error = getApiErrorDetail(e)
       saveRunToHistory({ meta: runMeta, results: { ...run.results, meta: runMeta } })
       throw e
     }
@@ -245,8 +309,14 @@ export default function App() {
             run.results.meta = nextMeta
             attachRunningJob({ runId, jobId, run, skipRunningCountBump: false })
           }
-        } catch {
-          const nextMeta = { ...(r.meta || {}), status: 'interrupted' }
+        } catch (e) {
+          const status = getApiErrorHttpStatus(e)
+          const detail = getApiErrorDetail(e)
+          const nextMeta = {
+            ...(r.meta || {}),
+            status: status === 404 ? 'interrupted' : 'error',
+            error: detail,
+          }
           saveRunToHistory({ meta: nextMeta, results: { ...(r.results || {}), meta: nextMeta } })
         }
       })()
@@ -284,19 +354,8 @@ export default function App() {
     }
   }
 
-  function handleHistoryDelete(entry) {
-    if (!entry?.id) return
-    if (entry?.meta?.status === 'running') {
-      const cancel = cancelByRunIdRef.current.get(entry.id)
-      if (cancel) {
-        void cancel()
-      } else {
-        setRunningCount(c => Math.max(0, c - 1))
-        const jid = entry?.meta?.job_id
-        if (jid) attachedJobIdsRef.current.delete(jid)
-      }
-      cancelByRunIdRef.current.delete(entry.id)
-    }
+  function handleHistoryDelete(_entry) {
+    // Cancellation is initiated from History UI via onCancelRunningJob before delete removes the row.
   }
 
   return (
@@ -315,7 +374,18 @@ export default function App() {
             <span className="text-sm text-gray-400">Quick RAG evaluation in the browser</span>
           </div>
           <div className="flex items-center gap-3">
-            {runningSummary && <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">{runningSummary}</span>}
+            {runningSummary && (
+              <>
+                <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">{runningSummary}</span>
+                <button
+                  type="button"
+                  onClick={() => void cancelAllRunningEvaluations()}
+                  className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded-lg text-gray-800 hover:bg-gray-50"
+                >
+                  Cancel all
+                </button>
+              </>
+            )}
             <button
               onClick={openHistory}
               className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -331,11 +401,19 @@ export default function App() {
       >
         <Steps current={step} />
 
-        {step === 'upload' && <Upload onParsed={handleParsed} onLoadScores={handleLoadScores} />}
+        {step === 'upload' && (
+          <Upload
+            onParsed={handleParsed}
+            onLoadScores={handleLoadScores}
+            runningCount={runningCount}
+            onCancelAllRunning={() => void cancelAllRunningEvaluations()}
+          />
+        )}
         {step === 'configure' && (
           <Configure
             parsedFile={parsedFile}
             onStartRun={startRun}
+            onCancelRunningJob={jobId => void cancelEvaluationByJobId(jobId)}
             onOpenResults={res => {
               if (!res) return
               setEvalResults(res)
@@ -345,12 +423,13 @@ export default function App() {
           />
         )}
         {step === 'results' && (
-          <Results results={evalResults} onReset={reset} />
+          <Results results={evalResults} onReset={reset} onCancelRunningJob={jobId => void cancelEvaluationByJobId(jobId)} />
         )}
         {step === 'history' && (
           <History
             onOpenRun={openRunFromHistory}
             onDeleteRun={handleHistoryDelete}
+            onCancelRunningJob={jobId => void cancelEvaluationByJobId(jobId)}
             onBack={() => setStep(evalResults ? 'results' : 'upload')}
           />
         )}

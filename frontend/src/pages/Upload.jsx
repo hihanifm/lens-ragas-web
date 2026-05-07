@@ -111,7 +111,7 @@ async function buildPreview(file) {
   return null
 }
 
-export default function Upload({ onParsed, onLoadScores }) {
+export default function Upload({ onParsed, onLoadScores, runningCount = 0, onCancelAllRunning }) {
   const inputRef = useRef()
   const scoresRef = useRef()
   const [dragging, setDragging] = useState(false)
@@ -229,6 +229,22 @@ export default function Upload({ onParsed, onLoadScores }) {
         <code className="bg-gray-100 px-1 rounded">ground_truth</code>,{' '}
         <code className="bg-gray-100 px-1 rounded">answer</code> (optional)
       </p>
+
+      {runningCount > 0 && onCancelAllRunning && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+          <span className="text-amber-900">
+            <span className="font-medium tabular-nums">{runningCount}</span> evaluation{runningCount === 1 ? '' : 's'} still
+            running (see <span className="font-medium">History</span>).
+          </span>
+          <button
+            type="button"
+            onClick={() => onCancelAllRunning()}
+            className="px-3 py-1.5 text-xs font-medium bg-white border border-amber-300 rounded-lg text-amber-900 hover:bg-amber-100 shrink-0"
+          >
+            Cancel all
+          </button>
+        </div>
+      )}
 
       <div className="mb-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Project (optional)</h3>
