@@ -18,6 +18,8 @@ test('upload fixture transitions to configure screen', async ({ page }) => {
   const fixturePath = path.resolve(testDir, '..', 'fixtures', 'sample-lens.json')
   await page.getByTestId('upload-input').setInputFiles(fixturePath)
 
+  await expect(page.getByText('File parsed.')).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText('File loaded')).toBeVisible()
   await expect(page.getByText(/\d+\s+rows/i)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Run Evaluation' })).toBeVisible()
@@ -30,6 +32,8 @@ test('run evaluation shows results', async ({ page }) => {
   const fixturePath = path.resolve(testDir, '..', 'fixtures', 'sample-lens.json')
   await page.getByTestId('upload-input').setInputFiles(fixturePath)
 
+  await expect(page.getByText('File parsed.')).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText('File loaded')).toBeVisible()
 
   await page.getByTestId('run-evaluation').click()

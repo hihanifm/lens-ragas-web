@@ -58,9 +58,13 @@ test.describe('Ollama gemma local E2E', () => {
   })
 
   test('sample LENS JSON evaluates with Ollama judge model', async ({ page }) => {
+    test.setTimeout(360_000)
+
     await page.goto('/')
 
     await page.getByTestId('upload-input').setInputFiles(fixturePath)
+    await expect(page.getByText('File parsed.')).toBeVisible({ timeout: 60_000 })
+    await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByText('File loaded')).toBeVisible()
 
     await page.getByRole('button', { name: /Ollama \(on-prem\)/i }).click()
