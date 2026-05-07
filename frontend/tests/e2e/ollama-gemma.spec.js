@@ -23,10 +23,14 @@ const fixturePath = path.resolve(testDir, '..', 'fixtures', 'sample-lens.json')
 const OLLAMA_MODEL = process.env.E2E_OLLAMA_MODEL || 'gemma4:e2b'
 
 async function pickOllamaModel(page, model) {
-  await expect(page.getByText('Loading models...')).not.toBeVisible({ timeout: 60_000 })
-
   const plain = page.getByTestId('configure-ollama-model-input')
   const select = page.getByTestId('configure-ollama-model-select')
+
+  // Ollama UI: "Loading models…" replaces the model control until /api/ollama/models returns.
+  await expect(page.getByText('Loading models...')).not.toBeVisible({ timeout: 120_000 })
+  // Then either the <select> or the plain "Model" field is shown; wait so we do not
+  // synchronously miss both and fall through to a dead plain.fill().
+  await expect(select.or(plain)).toBeVisible({ timeout: 30_000 })
 
   if (await plain.isVisible()) {
     await plain.fill(model)
@@ -46,7 +50,7 @@ async function pickOllamaModel(page, model) {
     return
   }
 
-  await plain.fill(model)
+  throw new Error('Ollama model field did not become usable (no plain input or select).')
 }
 
 test.describe('Ollama gemma local E2E', () => {
